@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpendWise Pro - Week 3</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="container">
+    <section class="hero">
+      <div class="panel hero-card">
+        <div class="badge">HK252 • CNPM • Nhóm 10 • Tuần 3</div>
+        <h1>SpendWise Pro</h1>
+        <p>Bản build tuần 3 hiện thực hóa các chức năng cốt lõi đã phân tích ở tuần 1 và thiết kế ở tuần 2: quản lý danh mục, ghi chép giao dịch, hạn mức chi tiêu và báo cáo tài chính trực quan.</p>
+        <div class="actions">
+          <button class="primary-btn" onclick="document.querySelector('#transaction-amount').focus()">Thêm giao dịch nhanh</button>
+          <button class="secondary-btn" onclick="document.querySelector('#category-name').focus()">Thêm danh mục</button>
+          <button class="danger-btn" id="reset-demo-data">Khôi phục dữ liệu demo</button>
+        </div>
+      </div>
+      <div class="panel metrics-card">
+        <div class="metrics-grid">
+          <div class="metric-box"><span>Tháng đang xem</span><div id="current-month-badge" class="metric-value">2026-05</div></div>
+          <div class="metric-box"><span>Số giao dịch</span><div id="summary-count" class="metric-value">0 giao dịch</div></div>
+          <div class="metric-box"><span>Tổng thu</span><div id="summary-income" class="metric-value positive">0 ₫</div></div>
+          <div class="metric-box"><span>Tổng chi</span><div id="summary-expense" class="metric-value negative">0 ₫</div></div>
+          <div class="metric-box" style="grid-column:1 / -1"><span>Số dư tháng</span><div id="summary-balance" class="metric-value">0 ₫</div></div>
+        </div>
+      </div>
+    </section>
+    <div class="grid">
+      <section class="panel section"><h2>Cảnh báo ngân sách</h2><p class="subtitle">Theo dõi ngưỡng 70% / 90% / vượt 100% theo Acceptance Criteria của hạn mức chi tiêu.</p><div id="budget-alerts" class="alerts-grid"></div></section>
+      <section class="panel section"><h2>Bộ lọc báo cáo</h2><p class="subtitle">Chọn tháng và năm để theo dõi dữ liệu Dashboard và biểu đồ.</p><div class="report-controls"><div><label for="report-month">Tháng báo cáo</label><input id="report-month" type="month" /></div><div><label for="report-year">Năm báo cáo</label><input id="report-year" type="number" min="2024" max="2035" step="1" /></div></div></section>
+      <section class="panel section"><h2>Quản lý danh mục thu/chi</h2><p class="subtitle">Hỗ trợ thêm, sửa, xóa danh mục với validation trùng tên và ràng buộc sử dụng.</p><form id="category-form"><div class="form-grid"><div><label for="category-name">Tên danh mục</label><input id="category-name" type="text" placeholder="Ví dụ: Ăn uống" /></div><div><label for="category-type">Loại</label><select id="category-type"><option value="expense">Chi</option><option value="income">Thu</option></select></div><div class="full"><label for="category-icon">Icon</label><input id="category-icon" type="text" placeholder="Ví dụ: 🍜" /></div></div><div class="form-actions"><button class="primary-btn" type="submit"><span id="category-submit-text">Lưu danh mục</span></button><button class="secondary-btn" type="button" id="category-cancel-edit" hidden>Hủy chỉnh sửa</button></div><div id="category-error" class="helper-error"></div></form><div class="sub-columns"><div class="sub-card"><h3>Danh mục Thu</h3><div id="category-income-list" class="lists"></div></div><div class="sub-card"><h3>Danh mục Chi</h3><div id="category-expense-list" class="lists"></div></div></div></section>
+      <section class="panel section"><h2>Ghi chép giao dịch</h2><p class="subtitle">Nhập giao dịch mới, chỉnh sửa/xóa giao dịch, tự động cập nhật Dashboard và cảnh báo hạn mức.</p><form id="transaction-form"><div class="form-grid"><div><label for="transaction-type">Loại giao dịch</label><select id="transaction-type"><option value="expense">Chi</option><option value="income">Thu</option></select></div><div><label for="transaction-amount">Số tiền</label><input id="transaction-amount" type="number" min="0" placeholder="0" /></div><div><label for="transaction-category">Danh mục</label><select id="transaction-category"></select></div><div><label for="transaction-date">Ngày giao dịch</label><input id="transaction-date" type="date" /></div><div class="full"><label for="transaction-description">Mô tả</label><textarea id="transaction-description" placeholder="Ghi chú ngắn cho giao dịch"></textarea></div></div><div class="form-actions"><button class="primary-btn" type="submit"><span id="transaction-submit-text">Lưu giao dịch</span></button><button class="secondary-btn" type="button" id="transaction-cancel-edit" hidden>Hủy chỉnh sửa</button></div><div id="transaction-error" class="helper-error"></div></form><div id="transaction-list" class="lists"></div></section>
+      <section class="panel section"><h2>Thiết lập hạn mức chi tiêu</h2><p class="subtitle">Thiết lập hạn mức theo danh mục chi và theo tháng, hiển thị thanh tiến trình trực quan.</p><form id="budget-form"><div class="form-grid"><div><label for="budget-category">Danh mục chi</label><select id="budget-category"></select></div><div><label for="budget-amount">Hạn mức</label><input id="budget-amount" type="number" min="0" placeholder="0" /></div><div class="full"><label for="budget-month">Áp dụng cho tháng</label><input id="budget-month" type="month" /></div></div><div class="form-actions"><button class="primary-btn" type="submit">Lưu hạn mức</button></div><div id="budget-error" class="helper-error"></div></form><div id="budget-list" class="lists"></div></section>
+      <section class="panel section" style="grid-column: 1 / -1;"><h2>Báo cáo tài chính trực quan</h2><p class="subtitle">Biểu đồ donut thể hiện tỷ trọng chi tiêu theo danh mục và biểu đồ cột thể hiện Thu/Chi theo tháng.</p><div class="charts-grid"><div class="chart-card"><h3>Chi theo danh mục trong tháng</h3><div class="donut-wrap"><svg id="donut-chart" viewBox="0 0 220 220"></svg></div><div id="pie-legend"></div></div><div class="chart-card"><h3>Tổng quan năm</h3><div id="yearly-chart" class="bar-chart"></div><div class="table-wrap"><table><thead><tr><th>Tháng</th><th>Tổng thu</th><th>Tổng chi</th><th>Số dư</th></tr></thead><tbody id="yearly-table"></tbody></table></div></div></div></section>
+    </div>
+    <footer>Build tuần 3 được đóng gói trong thư mục này. Mở file <strong>SpendWisePro/index.html</strong> bằng trình duyệt để chạy demo.</footer>
+  </div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
