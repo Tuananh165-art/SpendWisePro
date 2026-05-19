@@ -26,6 +26,14 @@ import {
 
 const STORAGE_KEY = 'spendwise-pro-week3-state-v3';
 
+const DEFAULT_FILTERS = {
+  search: '',
+  month: '2026-05',
+  wallet: 'all',
+  type: 'all',
+  category: 'all'
+};
+
 const DEFAULT_STATE = {
   categories: [
     { id: 'cat-salary', name: 'Lương', type: 'income', icon: '💼' },
@@ -74,7 +82,8 @@ const DEFAULT_STATE = {
     { id: 'debt2', name: 'Anh Minh mượn', amount: 1800000, type: 'receivable', due: '2026-06-05', note: 'Ứng trước chuyến đi' },
     { id: 'debt3', name: 'Khoản vay laptop', amount: 6200000, type: 'payable', due: '2026-06-18', note: 'Kỳ trả thứ 3' }
   ],
-  alerts: []
+  alerts: [],
+  filters: { ...DEFAULT_FILTERS }
 };
 
 const els = {};
@@ -88,7 +97,7 @@ let editingCategoryId = null;
 let currentModal = 'transaction';
 
 const sectionMeta = {
-  dashboard: { title: 'Dashboard', subtitle: 'Chào buổi sáng! Hôm nay bạn chi tiêu gì chưa?' },
+  dashboard: { title: 'Dashboard', subtitle: 'Hôm nay bạn chi tiêu gì chưa?' },
   transactions: { title: 'Lịch sử Giao dịch', subtitle: 'Quản lý và tra cứu lịch sử thu chi.' },
   wallets: { title: 'Ví & Danh mục', subtitle: 'Quản lý ví, danh mục thu chi và đồng bộ số dư theo giao dịch thực tế.' },
   budgets: { title: 'Hạn mức Chi tiêu', subtitle: 'Theo dõi chi tiêu theo danh mục với cảnh báo ngân sách thông minh.' },
@@ -103,6 +112,7 @@ function loadState() {
     if (!raw) return structuredClone(DEFAULT_STATE);
     const parsed = JSON.parse(raw);
     const merged = { ...structuredClone(DEFAULT_STATE), ...parsed };
+    merged.filters = { ...DEFAULT_FILTERS, ...(parsed?.filters || {}) };
     merged.wallets = computeWalletBalances((merged.wallets || []).map(wallet => ({ ...wallet, openingBalance: Number(wallet.openingBalance ?? wallet.balance ?? 0) })), merged.transactions || []);
     return merged;
   } catch {
@@ -239,8 +249,31 @@ function categoriesForType(type) {
   return sortCategories(state.categories.filter(item => item.type === type && canManageCategory(item.id)));
 }
 
+function setSelectValueWithFallback(selectEl, preferred, fallback = 'all') {
+  const values = Array.from(selectEl.options).map(option => option.value);
+  const value = values.includes(String(preferred)) ? String(preferred) : fallback;
+  selectEl.value = value;
+  return value;
+}
+
+function syncFiltersToInputs() {
+  els.searchInput.value = String(state.filters.search || '');
+  els.reportMonth.value = String(state.filters.month || DEFAULT_FILTERS.month);
+  state.filters.wallet = setSelectValueWithFallback(els.walletFilter, state.filters.wallet, 'all');
+  state.filters.type = setSelectValueWithFallback(els.typeFilter, state.filters.type, 'all');
+  state.filters.category = setSelectValueWithFallback(els.categoryFilter, state.filters.category, 'all');
+}
+
+function syncFiltersFromInputs() {
+  state.filters.search = String(els.searchInput.value || '').trim();
+  state.filters.month = String(els.reportMonth.value || DEFAULT_FILTERS.month);
+  state.filters.wallet = String(els.walletFilter.value || 'all');
+  state.filters.type = String(els.typeFilter.value || 'all');
+  state.filters.category = String(els.categoryFilter.value || 'all');
+}
+
 function getSelectedMonth() {
-  return els.reportMonth.value || '2026-05';
+  return state.filters.month || DEFAULT_FILTERS.month;
 }
 
 function setActiveSection(section) {
@@ -303,6 +336,12 @@ function resetForms() {
 }
 
 function syncSelectors() {
+  const selectedTxCategory = els.transactionCategory.value;
+  const selectedTxWallet = els.transactionWallet.value;
+  const selectedBudgetCategory = els.budgetCategory.value;
+  const selectedFromWallet = els.transferFromWallet.value;
+  const selectedToWallet = els.transferToWallet.value;
+
   const txType = els.transactionType.value;
   const txCategories = categoriesForType(txType);
   els.transactionCategory.innerHTML = '<option value="">-- Chọn danh mục --</option>' + txCategories.map(item => `<option value="${item.id}">${item.icon} ${item.name}</option>`).join('');
@@ -310,24 +349,38 @@ function syncSelectors() {
   els.budgetCategory.innerHTML = categoriesForType('expense').map(item => `<option value="${item.id}">${item.icon} ${item.name}</option>`).join('');
   els.walletFilter.innerHTML = '<option value="all">Tất cả ví</option>' + state.wallets.map(item => `<option value="${item.id}">${item.name}</option>`).join('');
   els.categoryFilter.innerHTML = '<option value="all">Tất cả danh mục</option>' + sortCategories(state.categories.filter(item => item.id !== 'cat-transfer')).map(item => `<option value="${item.id}">${item.name}</option>`).join('');
+
+  const txCategoryValues = Array.from(els.transactionCategory.options).map(option => option.value);
+  els.transactionCategory.value = txCategoryValues.includes(selectedTxCategory) ? selectedTxCategory : '';
+  const txWalletValues = Array.from(els.transactionWallet.options).map(option => option.value);
+  if (txWalletValues.length) els.transactionWallet.value = txWalletValues.includes(selectedTxWallet) ? selectedTxWallet : txWalletValues[0];
+  const budgetCategoryValues = Array.from(els.budgetCategory.options).map(option => option.value);
+  if (budgetCategoryValues.length) els.budgetCategory.value = budgetCategoryValues.includes(selectedBudgetCategory) ? selectedBudgetCategory : budgetCategoryValues[0];
+
   const transferOptions = state.wallets.map(item => `<option value="${item.id}">${item.name}</option>`).join('');
   els.transferFromWallet.innerHTML = transferOptions;
   els.transferToWallet.innerHTML = transferOptions;
-  if (state.wallets[0] && !els.transferFromWallet.value) els.transferFromWallet.value = state.wallets[0].id;
-  if (state.wallets[1] && !els.transferToWallet.value) els.transferToWallet.value = state.wallets[1].id;
+  const walletIds = state.wallets.map(item => item.id);
+  if (walletIds.length) {
+    els.transferFromWallet.value = walletIds.includes(selectedFromWallet) ? selectedFromWallet : walletIds[0];
+    const fallbackTo = walletIds[1] || walletIds[0];
+    els.transferToWallet.value = walletIds.includes(selectedToWallet) ? selectedToWallet : fallbackTo;
+  }
+
+  syncFiltersToInputs();
 }
 
 function filteredTransactions() {
   const month = getSelectedMonth();
-  const search = (els.searchInput.value || '').trim().toLowerCase();
-  const wallet = els.walletFilter.value;
-  const type = els.typeFilter.value;
-  const category = els.categoryFilter.value;
+  const search = String(state.filters.search || '').toLowerCase();
+  const wallet = String(state.filters.wallet || 'all');
+  const type = String(state.filters.type || 'all');
+  const category = String(state.filters.category || 'all');
   return state.transactions
     .filter(item => monthKey(item.date) === month)
-    .filter(item => wallet === 'all' || item.walletId === wallet)
-    .filter(item => type === 'all' || item.type === type)
-    .filter(item => category === 'all' || item.categoryId === category)
+    .filter(item => wallet === 'all' || String(item.walletId) === wallet)
+    .filter(item => type === 'all' || String(item.type) === type)
+    .filter(item => category === 'all' || String(item.categoryId) === category)
     .filter(item => {
       if (!search) return true;
       const walletName = walletById(item.walletId)?.name || '';
@@ -395,6 +448,8 @@ function renderWalletSummary() {
 }
 
 function renderWalletGrid() {
+  const month = getSelectedMonth();
+
   els.walletGrid.innerHTML = state.wallets.map(item => `
     <article class="wallet-card">
       <div class="wallet-card-top">
@@ -410,9 +465,9 @@ function renderWalletGrid() {
     </article>`).join('');
 
   const categoryCards = sortCategories(state.categories.filter(item => item.id !== 'cat-transfer')).map(item => {
-    const linkedTransactions = state.transactions.filter(tx => tx.categoryId === item.id).length;
-    const linkedBudgets = state.budgets.filter(budget => budget.categoryId === item.id).length;
-    const canDelete = linkedTransactions === 0 && linkedBudgets === 0;
+    const linkedTransactions = state.transactions.filter(tx => tx.categoryId === item.id && monthKey(tx.date) === month).length;
+    const linkedBudgets = state.budgets.filter(budget => budget.categoryId === item.id && budget.month === month).length;
+    const canDelete = state.transactions.filter(tx => tx.categoryId === item.id).length === 0 && state.budgets.filter(budget => budget.categoryId === item.id).length === 0;
     return `
       <article class="wallet-card category-card">
         <div class="wallet-card-top">
@@ -424,7 +479,7 @@ function renderWalletGrid() {
         </div>
         <div class="wallet-title">${item.name}</div>
         <div class="wallet-balance">${item.type === 'income' ? 'Danh mục Thu' : 'Danh mục Chi'}</div>
-        <div class="wallet-kind">${linkedTransactions} giao dịch • ${linkedBudgets} hạn mức</div>
+        <div class="wallet-kind">${linkedTransactions} giao dịch tháng • ${linkedBudgets} hạn mức tháng</div>
       </article>`;
   }).join('') || '<div class="empty-state">Chưa có danh mục tuỳ chỉnh nào.</div>';
 
@@ -474,8 +529,8 @@ function renderGoalGrid() {
 }
 
 function renderDebtSection() {
-  const payable = state.debts.filter(item => item.type === 'payable').reduce((sum, item) => sum + item.amount, 0);
-  const receivable = state.debts.filter(item => item.type === 'receivable').reduce((sum, item) => sum + item.amount, 0);
+  const payable = state.debts.filter(item => item.type === 'payable').reduce((sum, item) => sum + Number(item.amount), 0);
+  const receivable = state.debts.filter(item => item.type === 'receivable').reduce((sum, item) => sum + Number(item.amount), 0);
   els.debtPayable.textContent = formatCurrency(payable);
   els.debtReceivable.textContent = formatCurrency(receivable);
   els.debtNet.textContent = formatCurrency(receivable - payable);
@@ -514,7 +569,7 @@ function renderTransactionTable() {
         <td class="${item.type === 'income' ? 'positive' : 'negative'}"><strong>${item.type === 'income' ? '+' : '-'}${formatCurrency(item.amount)}</strong></td>
         <td>
           <div class="row-actions">
-            <button class="icon-square edit" data-edit-transaction="${item.id}">✎</button>
+            ${item.transferId ? '' : `<button class="icon-square edit" data-edit-transaction="${item.id}">✎</button>`}
             <button class="icon-square delete" data-delete-transaction="${item.id}">🗑</button>
           </div>
         </td>
@@ -742,21 +797,52 @@ function handleCategorySubmit(event) {
 
 function handleTransferSubmit(event) {
   event.preventDefault();
-  const result = transferBetweenWallets(state.wallets, {
-    fromWalletId: els.transferFromWallet.value,
-    toWalletId: els.transferToWallet.value,
-    amount: els.transferAmount.value
-  });
-  if (!result.ok) {
-    els.transferError.textContent = result.message;
-    return;
-  }
+  const fromWalletId = els.transferFromWallet.value;
+  const toWalletId = els.transferToWallet.value;
   const amount = Number(els.transferAmount.value);
   const date = els.transferDate.value || todayISO();
-  const fromWalletName = walletById(els.transferFromWallet.value)?.name;
-  const toWalletName = walletById(els.transferToWallet.value)?.name;
   const note = els.transferNote.value.trim() || 'Chuyển tiền giữa ví';
-  state.wallets = result.wallets.map(wallet => ({ ...wallet, openingBalance: Number(wallet.balance) }));
+
+  const validation = transferBetweenWallets(state.wallets, { fromWalletId, toWalletId, amount });
+  if (!validation.ok) {
+    els.transferError.textContent = validation.message;
+    return;
+  }
+
+  const fromWalletName = walletById(fromWalletId)?.name;
+  const toWalletName = walletById(toWalletId)?.name;
+  const transferId = createId('transfer');
+  const description = `${note} (${fromWalletName} → ${toWalletName})`;
+
+  state.transactions.push(
+    {
+      id: createId('tx'),
+      transferId,
+      transferRole: 'out',
+      linkedWalletId: toWalletId,
+      type: 'expense',
+      amount,
+      categoryId: 'cat-transfer',
+      walletId: fromWalletId,
+      date,
+      description,
+      tag: 'Chuyển ví'
+    },
+    {
+      id: createId('tx'),
+      transferId,
+      transferRole: 'in',
+      linkedWalletId: fromWalletId,
+      type: 'income',
+      amount,
+      categoryId: 'cat-transfer',
+      walletId: toWalletId,
+      date,
+      description,
+      tag: 'Chuyển ví'
+    }
+  );
+
   recalculateWalletBalances();
   state.alerts.push({ level: 'safe', text: `Đã chuyển ${formatCurrency(amount)} từ ${fromWalletName} sang ${toWalletName}` });
   closeModal();
@@ -790,6 +876,10 @@ function handleDebtSubmit(event) {
 function editTransaction(id) {
   const tx = state.transactions.find(item => item.id === id);
   if (!tx) return;
+  if (tx.transferId) {
+    alert('Giao dịch chuyển tiền không chỉnh sửa trực tiếp. Vui lòng xóa cặp chuyển tiền và tạo lại.');
+    return;
+  }
   clearEditingState();
   editingTransactionId = id;
   els.transactionType.value = tx.type;
@@ -884,8 +974,14 @@ function editDebt(id) {
 function deleteTransaction(id) {
   const tx = state.transactions.find(item => item.id === id);
   if (!tx) return;
-  if (!confirm(`Xóa giao dịch ${tx.description || tx.id}?`)) return;
-  state.transactions = state.transactions.filter(item => item.id !== id);
+  const isTransfer = Boolean(tx.transferId);
+  const message = isTransfer
+    ? `Xóa giao dịch chuyển tiền ${tx.description || tx.id}? Hệ thống sẽ xóa cả 2 bút toán liên kết.`
+    : `Xóa giao dịch ${tx.description || tx.id}?`;
+  if (!confirm(message)) return;
+  state.transactions = isTransfer
+    ? state.transactions.filter(item => item.transferId !== tx.transferId)
+    : state.transactions.filter(item => item.id !== id);
   recalculateWalletBalances();
   renderAll();
 }
@@ -965,8 +1061,15 @@ function attachEvents() {
   els.categoryForm.addEventListener('submit', handleCategorySubmit);
   els.transferForm.addEventListener('submit', handleTransferSubmit);
   els.debtForm.addEventListener('submit', handleDebtSubmit);
-  [els.searchInput, els.reportMonth, els.walletFilter, els.typeFilter, els.categoryFilter].forEach(el => el.addEventListener('input', renderAll));
-  [els.reportMonth, els.walletFilter, els.typeFilter, els.categoryFilter].forEach(el => el.addEventListener('change', renderAll));
+  const filterInputs = [els.searchInput, els.reportMonth, els.walletFilter, els.typeFilter, els.categoryFilter];
+  filterInputs.forEach(el => el.addEventListener('input', () => {
+    syncFiltersFromInputs();
+    renderAll();
+  }));
+  filterInputs.forEach(el => el.addEventListener('change', () => {
+    syncFiltersFromInputs();
+    renderAll();
+  }));
   $('#reset-demo-data').addEventListener('click', () => {
     if (!confirm('Khôi phục dữ liệu demo mặc định?')) return;
     state = structuredClone(DEFAULT_STATE);
@@ -1004,7 +1107,7 @@ function attachEvents() {
 
 function init() {
   bindElements();
-  els.reportMonth.value = '2026-05';
+  syncFiltersToInputs();
   resetForms();
   syncSelectors();
   attachEvents();

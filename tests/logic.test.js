@@ -180,6 +180,44 @@ test('computeWalletBalances derives wallet balances from opening balance and tra
   assert.equal(result.find(item => item.id === 'bank').balance, 4550000);
 });
 
+test('computeWalletBalances handles transfer as expense+income pair without changing total assets', () => {
+  const baseWallets = [
+    { id: 'cash', name: 'Tiền mặt', type: 'CASH', openingBalance: 1000000, balance: 1000000 },
+    { id: 'bank', name: 'VPBank', type: 'BANK', openingBalance: 5000000, balance: 5000000 }
+  ];
+  const txs = [
+    { id: 't1', transferId: 'tr1', type: 'expense', walletId: 'bank', categoryId: 'cat-transfer', amount: 700000 },
+    { id: 't2', transferId: 'tr1', type: 'income', walletId: 'cash', categoryId: 'cat-transfer', amount: 700000 }
+  ];
+
+  const result = computeWalletBalances(baseWallets, txs);
+  const total = result.reduce((sum, item) => sum + Number(item.balance), 0);
+
+  assert.equal(result.find(item => item.id === 'bank').balance, 4300000);
+  assert.equal(result.find(item => item.id === 'cash').balance, 1700000);
+  assert.equal(total, 6000000);
+});
+
+test('computeWalletBalances restores balances after removing transfer pair', () => {
+  const baseWallets = [
+    { id: 'cash', name: 'Tiền mặt', type: 'CASH', openingBalance: 1000000, balance: 1000000 },
+    { id: 'bank', name: 'VPBank', type: 'BANK', openingBalance: 5000000, balance: 5000000 }
+  ];
+  const txsWithTransfer = [
+    { id: 's1', type: 'expense', walletId: 'cash', amount: 100000 },
+    { id: 't1', transferId: 'tr2', type: 'expense', walletId: 'bank', categoryId: 'cat-transfer', amount: 300000 },
+    { id: 't2', transferId: 'tr2', type: 'income', walletId: 'cash', categoryId: 'cat-transfer', amount: 300000 }
+  ];
+
+  const withTransfer = computeWalletBalances(baseWallets, txsWithTransfer);
+  const withoutTransfer = computeWalletBalances(baseWallets, txsWithTransfer.filter(item => item.transferId !== 'tr2'));
+
+  assert.equal(withTransfer.find(item => item.id === 'cash').balance, 1200000);
+  assert.equal(withTransfer.find(item => item.id === 'bank').balance, 4700000);
+  assert.equal(withoutTransfer.find(item => item.id === 'cash').balance, 900000);
+  assert.equal(withoutTransfer.find(item => item.id === 'bank').balance, 5000000);
+});
+
 test('deleteCategoryById rejects deleting category used by transactions or budgets', () => {
   const result = deleteCategoryById(
     categories,
