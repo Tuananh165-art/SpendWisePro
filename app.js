@@ -89,7 +89,7 @@ let currentModal = 'transaction';
 
 const sectionMeta = {
   dashboard: { title: 'Dashboard', subtitle: 'Chào buổi sáng! Hôm nay bạn chi tiêu gì chưa?' },
-  transactions: { title: 'Lịch sử Giao dịch', subtitle: 'Quản lý và tra cứu lịch sử thu chi theo đúng thiết kế tuần 2.' },
+  transactions: { title: 'Lịch sử Giao dịch', subtitle: 'Quản lý và tra cứu lịch sử thu chi.' },
   wallets: { title: 'Ví & Danh mục', subtitle: 'Quản lý ví, danh mục thu chi và đồng bộ số dư theo giao dịch thực tế.' },
   budgets: { title: 'Hạn mức Chi tiêu', subtitle: 'Theo dõi chi tiêu theo danh mục với cảnh báo ngân sách thông minh.' },
   goals: { title: 'Mục tiêu Tiết kiệm', subtitle: 'Tăng tốc các mục tiêu tài chính cá nhân với progress trực quan.' },

@@ -231,7 +231,7 @@ button { cursor: pointer; }
   background: linear-gradient(135deg, var(--gold), var(--gold-2));
   box-shadow: var(--glow-gold);
 }
-.cta-primary span:first-child {
+.cta-primary > span:first-child:not([id]) {
   width: 28px;
   height: 28px;
   display: inline-grid;
@@ -488,6 +488,11 @@ button { cursor: pointer; }
 .filters-grid input::placeholder,
 textarea::placeholder { color: var(--muted-2); }
 textarea { min-height: 96px; resize: vertical; }
+
+select option {
+  color: #0f172a;
+  background: #f8fafc;
+}
 .transaction-table-wrap {
   margin-top: 20px;
   overflow-x: auto;
@@ -744,6 +749,8 @@ textarea { min-height: 96px; resize: vertical; }
 .modal-backdrop.hidden { display: none; }
 .modal-card {
   width: min(760px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
   border-radius: 30px;
   padding: 26px 28px;
 }
