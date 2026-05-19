@@ -154,6 +154,7 @@
       <section id="section-wallets" class="view-section">
         <div class="section-actions-row">
           <button class="cta-primary small" id="add-wallet-btn"><span>＋</span> Thêm ví mới</button>
+          <button class="cta-secondary small" id="new-category-btn">🏷 Quản lý danh mục</button>
           <button class="cta-gradient small" id="transfer-wallet-btn">⇄ Chuyển tiền</button>
         </div>
         <article class="panel-soft panel-large">
@@ -164,6 +165,15 @@
             </div>
           </div>
           <div id="wallet-grid" class="wallet-grid"></div>
+        </article>
+        <article class="panel-soft panel-large" style="margin-top:24px">
+          <div class="panel-header-row">
+            <div>
+              <h3>Danh mục thu / chi</h3>
+              <p>Thêm, sửa, xóa danh mục nghiệp vụ và tái sử dụng cho ghi chép giao dịch.</p>
+            </div>
+          </div>
+          <div id="category-grid" class="wallet-grid category-grid"></div>
         </article>
       </section>
 
@@ -201,6 +211,7 @@
                 <h3>Khoản nợ phải trả / phải thu</h3>
                 <p>Quản lý công nợ hai chiều, phân biệt rõ khoản thu và khoản chi.</p>
               </div>
+              <button class="cta-primary small" id="new-debt-btn"><span>＋</span> Thêm khoản nợ</button>
             </div>
             <div id="debt-list" class="stack-list debt-list"></div>
           </article>
@@ -317,7 +328,7 @@
           </div>
         </div>
         <div class="form-actions">
-          <button class="cta-primary small" type="submit">Lưu hạn mức</button>
+          <button class="cta-primary small" type="submit"><span id="budget-submit-text">Lưu hạn mức</span></button>
         </div>
         <div id="budget-error" class="helper-error"></div>
       </form>
@@ -342,9 +353,123 @@
           </div>
         </div>
         <div class="form-actions">
-          <button class="cta-primary small" type="submit">Lưu mục tiêu</button>
+          <button class="cta-primary small" type="submit"><span id="goal-submit-text">Lưu mục tiêu</span></button>
         </div>
         <div id="goal-error" class="helper-error"></div>
+      </form>
+
+      <form id="wallet-form" class="modal-form hidden-form">
+        <div class="form-grid">
+          <div>
+            <label for="wallet-name">Tên ví</label>
+            <input id="wallet-name" type="text" placeholder="Ví dụ: Techcombank" />
+          </div>
+          <div>
+            <label for="wallet-type">Loại ví</label>
+            <select id="wallet-type">
+              <option value="CASH">Tiền mặt</option>
+              <option value="BANK">Ngân hàng</option>
+              <option value="WALLET">Ví điện tử</option>
+            </select>
+          </div>
+          <div>
+            <label for="wallet-balance">Số dư ban đầu</label>
+            <input id="wallet-balance" type="number" min="0" placeholder="0" />
+          </div>
+          <div>
+            <label for="wallet-icon">Biểu tượng</label>
+            <input id="wallet-icon" type="text" maxlength="4" placeholder="💳" />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="cta-primary small" type="submit"><span id="wallet-submit-text">Lưu ví</span></button>
+        </div>
+        <div id="wallet-error" class="helper-error"></div>
+      </form>
+
+      <form id="category-form" class="modal-form hidden-form">
+        <div class="form-grid">
+          <div>
+            <label for="category-name">Tên danh mục</label>
+            <input id="category-name" type="text" placeholder="Ví dụ: Y tế" />
+          </div>
+          <div>
+            <label for="category-type">Loại danh mục</label>
+            <select id="category-type">
+              <option value="expense">Chi</option>
+              <option value="income">Thu</option>
+            </select>
+          </div>
+          <div class="full">
+            <label for="category-icon">Biểu tượng</label>
+            <input id="category-icon" type="text" maxlength="4" placeholder="💊" />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="cta-primary small" type="submit"><span id="category-submit-text">Lưu danh mục</span></button>
+        </div>
+        <div id="category-error" class="helper-error"></div>
+      </form>
+
+      <form id="transfer-form" class="modal-form hidden-form">
+        <div class="form-grid">
+          <div>
+            <label for="transfer-from-wallet">Ví nguồn</label>
+            <select id="transfer-from-wallet"></select>
+          </div>
+          <div>
+            <label for="transfer-to-wallet">Ví đích</label>
+            <select id="transfer-to-wallet"></select>
+          </div>
+          <div>
+            <label for="transfer-amount">Số tiền chuyển</label>
+            <input id="transfer-amount" type="number" min="0" placeholder="0" />
+          </div>
+          <div>
+            <label for="transfer-date">Ngày chuyển</label>
+            <input id="transfer-date" type="date" />
+          </div>
+          <div class="full">
+            <label for="transfer-note">Ghi chú</label>
+            <textarea id="transfer-note" placeholder="Ví dụ: Chuyển tiền tiết kiệm"></textarea>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="cta-primary small" type="submit">Xác nhận chuyển</button>
+        </div>
+        <div id="transfer-error" class="helper-error"></div>
+      </form>
+
+      <form id="debt-form" class="modal-form hidden-form">
+        <div class="form-grid">
+          <div>
+            <label for="debt-name">Tên khoản nợ</label>
+            <input id="debt-name" type="text" placeholder="Ví dụ: Nợ thẻ tín dụng" />
+          </div>
+          <div>
+            <label for="debt-type">Loại</label>
+            <select id="debt-type">
+              <option value="payable">Phải trả</option>
+              <option value="receivable">Phải thu</option>
+            </select>
+          </div>
+          <div>
+            <label for="debt-amount">Số tiền</label>
+            <input id="debt-amount" type="number" min="0" placeholder="0" />
+          </div>
+          <div>
+            <label for="debt-due">Hạn thanh toán</label>
+            <input id="debt-due" type="date" />
+          </div>
+          <div class="full">
+            <label for="debt-note">Ghi chú</label>
+            <textarea id="debt-note" placeholder="Thông tin thêm"></textarea>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="cta-primary small" type="submit"><span id="debt-submit-text">Lưu khoản nợ</span></button>
+        </div>
+        <div id="debt-error" class="helper-error"></div>
       </form>
     </div>
   </div>

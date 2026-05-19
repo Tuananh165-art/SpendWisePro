@@ -114,3 +114,135 @@ export function buildBudgetAlert(latestTransaction, categories, budgets, transac
   if (status.usage >= 70) return { level: 'warning', text: `${category.name} đã đạt ${status.usage}% hạn mức tháng này` };
   return null;
 }
+
+export function normalizeName(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+export function validateWallet(wallets, payload, editingId = null) {
+  const name = String(payload?.name || '').trim();
+  const type = String(payload?.type || '').trim().toUpperCase();
+  const balance = Number(payload?.balance);
+  const icon = String(payload?.icon || '').trim();
+  if (!name) return { ok: false, message: 'Tên ví không được để trống' };
+  if (!['CASH', 'BANK', 'WALLET'].includes(type)) return { ok: false, message: 'Loại ví không hợp lệ' };
+  if (Number.isNaN(balance) || balance < 0) return { ok: false, message: 'Số dư ví phải từ 0 trở lên' };
+  const duplicated = wallets.some(item => normalizeName(item.name) === normalizeName(name) && item.id !== editingId);
+  if (duplicated) return { ok: false, message: 'Ví này đã tồn tại' };
+  return { ok: true, data: { name, type, balance, icon: icon || '💼' } };
+}
+
+export function transferBetweenWallets(wallets, payload) {
+  const fromWalletId = payload?.fromWalletId;
+  const toWalletId = payload?.toWalletId;
+  const amount = Number(payload?.amount);
+  if (!fromWalletId || !toWalletId) return { ok: false, message: 'Vui lòng chọn ví nguồn và ví đích' };
+  if (fromWalletId === toWalletId) return { ok: false, message: 'Ví nguồn và ví đích phải khác nhau' };
+  if (!(amount > 0)) return { ok: false, message: 'Số tiền chuyển phải lớn hơn 0' };
+  const fromWallet = wallets.find(item => item.id === fromWalletId);
+  const toWallet = wallets.find(item => item.id === toWalletId);
+  if (!fromWallet || !toWallet) return { ok: false, message: 'Ví chuyển tiền không tồn tại' };
+  if (Number(fromWallet.balance) < amount) return { ok: false, message: 'Ví nguồn không đủ số dư' };
+  const nextWallets = wallets.map(item => {
+    if (item.id === fromWalletId) return { ...item, balance: Number(item.balance) - amount };
+    if (item.id === toWalletId) return { ...item, balance: Number(item.balance) + amount };
+    return item;
+  });
+  return { ok: true, wallets: nextWallets };
+}
+
+export function computeWalletBalances(wallets, transactions) {
+  return wallets.map(wallet => {
+    const openingBalance = Number(wallet.openingBalance ?? wallet.balance ?? 0);
+    const relatedTransactions = transactions.filter(item => item.walletId === wallet.id);
+    const delta = relatedTransactions.reduce((sum, item) => {
+      if (item.type === 'income') return sum + Number(item.amount || 0);
+      if (item.type === 'expense') return sum - Number(item.amount || 0);
+      return sum;
+    }, 0);
+    return { ...wallet, openingBalance, balance: openingBalance + delta };
+  });
+}
+
+export function deleteCategoryById(categories, categoryId, transactions = [], budgets = []) {
+  const category = categories.find(item => item.id === categoryId);
+  if (!category) return { ok: false, message: 'Danh mục không tồn tại' };
+  if (categoryId === 'cat-transfer') return { ok: false, message: 'Không thể xóa danh mục hệ thống Chuyển ví' };
+  if (transactions.some(item => item.categoryId === categoryId)) {
+    return { ok: false, message: 'Không thể xóa danh mục đã phát sinh giao dịch' };
+  }
+  if (budgets.some(item => item.categoryId === categoryId)) {
+    return { ok: false, message: 'Không thể xóa danh mục đang được áp dụng hạn mức' };
+  }
+  return { ok: true, category, categories: categories.filter(item => item.id !== categoryId) };
+}
+
+export function createCategory(payload, existingCategories) {
+  const validation = validateCategory(existingCategories, payload);
+  if (!validation.ok) return validation;
+  return { ok: true, data: validation.data };
+}
+
+export function updateCategory(existingCategories, categoryId, payload) {
+  const validation = validateCategory(existingCategories, payload, categoryId);
+  if (!validation.ok) return validation;
+  return { ok: true, data: validation.data };
+}
+
+export function replaceCategory(categories, categoryId, payload) {
+  return categories.map(item => item.id === categoryId ? { ...item, ...payload } : item);
+}
+
+export function appendCategory(categories, category) {
+  return [...categories, category];
+}
+
+export function sortCategories(categories) {
+  return [...categories].sort((a, b) => {
+    if (a.type !== b.type) return a.type.localeCompare(b.type);
+    return a.name.localeCompare(b.name, 'vi');
+  });
+}
+
+export function validateGoal(payload) {
+  const name = String(payload?.name || '').trim();
+  const target = Number(payload?.target);
+  const current = Number(payload?.current);
+  const deadline = String(payload?.deadline || '').trim();
+  if (!name) return { ok: false, message: 'Vui lòng nhập tên mục tiêu' };
+  if (!(target > 0)) return { ok: false, message: 'Mục tiêu tiền phải lớn hơn 0' };
+  if (Number.isNaN(current) || current < 0) return { ok: false, message: 'Số tiền đã tích lũy phải hợp lệ' };
+  if (current > target) return { ok: false, message: 'Số đã tích lũy không được lớn hơn mục tiêu' };
+  return { ok: true, data: { name, target, current, deadline } };
+}
+
+export function computeGoalProgress(goal) {
+  const target = Number(goal?.target || 0);
+  const current = Number(goal?.current || 0);
+  if (!(target > 0)) return 0;
+  return Math.round((current / target) * 100);
+}
+
+export function deleteBudgetById(budgets, budgetId) {
+  const budget = budgets.find(item => item.id === budgetId);
+  if (!budget) return { ok: false, message: 'Hạn mức không tồn tại' };
+  return { ok: true, budget, budgets: budgets.filter(item => item.id !== budgetId) };
+}
+
+export function deleteGoalById(goals, goalId) {
+  const goal = goals.find(item => item.id === goalId);
+  if (!goal) return { ok: false, message: 'Mục tiêu không tồn tại' };
+  return { ok: true, goal, goals: goals.filter(item => item.id !== goalId) };
+}
+
+export function validateDebt(payload) {
+  const name = String(payload?.name || '').trim();
+  const amount = Number(payload?.amount);
+  const type = String(payload?.type || '').trim();
+  const due = String(payload?.due || '').trim();
+  const note = String(payload?.note || '').trim();
+  if (!name) return { ok: false, message: 'Tên khoản nợ không được để trống' };
+  if (!(amount > 0)) return { ok: false, message: 'Số tiền khoản nợ phải lớn hơn 0' };
+  if (!['payable', 'receivable'].includes(type)) return { ok: false, message: 'Loại khoản nợ không hợp lệ' };
+  return { ok: true, data: { name, amount, type, due, note } };
+}
