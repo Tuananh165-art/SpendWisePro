@@ -5,8 +5,8 @@ import fsp from 'node:fs/promises';
 import crypto from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
-const DEFAULT_STATIC_DIR = path.resolve('F:/SpendWisePro');
-const DEFAULT_DB_PATH = path.resolve('F:/SpendWisePro/spendwise.sqlite');
+const DEFAULT_STATIC_DIR = process.env.SPENDWISE_STATIC_DIR || process.cwd();
+const DEFAULT_DB_PATH = process.env.SPENDWISE_DB_PATH || path.join(process.cwd(), 'spendwise.sqlite');
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
