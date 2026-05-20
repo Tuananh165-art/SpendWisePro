@@ -21,10 +21,23 @@ import {
   validateDebt,
   replaceCategory,
   appendCategory,
-  sortCategories
+  sortCategories,
+  groupTransactionsByDate,
+  validateRegistration,
+  authenticateUser,
+  validateEmail,
+  buildBudgetOverview,
+  getAvailableYears,
+  nowTimeHHMM
 } from './logic.js';
+import {
+  buildConfirmationDialogModel,
+  getInitialClientState,
+  buildStoredSessionPayload
+} from './ui-helpers.js';
 
-const STORAGE_KEY = 'spendwise-pro-week3-state-v3';
+const API_BASE = '/api';
+const AUTH_KEY = 'spendwise-pro-auth-v2';
 
 const DEFAULT_FILTERS = {
   search: '',
@@ -35,6 +48,7 @@ const DEFAULT_FILTERS = {
 };
 
 const DEFAULT_STATE = {
+  ...getInitialClientState(),
   categories: [
     { id: 'cat-salary', name: 'Lương', type: 'income', icon: '💼' },
     { id: 'cat-bonus', name: 'Thưởng', type: 'income', icon: '🎉' },
@@ -54,15 +68,15 @@ const DEFAULT_STATE = {
     { id: 'wallet-usd', name: 'USD Account', type: 'BANK', icon: '💲', balance: 4200000, openingBalance: 4200000 }
   ],
   transactions: [
-    { id: 'tx1', type: 'income', amount: 15000000, categoryId: 'cat-salary', walletId: 'wallet-vpbank', date: '2026-05-01', description: 'Lương tháng 5', tag: '' },
-    { id: 'tx2', type: 'expense', amount: 450000, categoryId: 'cat-food', walletId: 'wallet-cash', date: '2026-05-02', description: 'Ăn trưa cả tuần', tag: '' },
-    { id: 'tx3', type: 'expense', amount: 180000, categoryId: 'cat-transport', walletId: 'wallet-momo', date: '2026-05-03', description: 'Đổ xăng', tag: '' },
-    { id: 'tx4', type: 'expense', amount: 600000, categoryId: 'cat-bills', walletId: 'wallet-vpbank', date: '2026-05-05', description: 'Tiền điện nước', tag: 'Định kỳ' },
-    { id: 'tx5', type: 'expense', amount: 320000, categoryId: 'cat-entertainment', walletId: 'wallet-zalo', date: '2026-05-10', description: 'Xem phim cuối tuần', tag: '' },
-    { id: 'tx6', type: 'income', amount: 2000000, categoryId: 'cat-bonus', walletId: 'wallet-vpbank', date: '2026-04-20', description: 'Thưởng dự án', tag: '' },
-    { id: 'tx7', type: 'expense', amount: 2920000, categoryId: 'cat-shopping', walletId: 'wallet-vpbank', date: '2026-05-14', description: 'Mua sắm gia đình', tag: '' },
-    { id: 'tx8', type: 'expense', amount: 300000, categoryId: 'cat-food', walletId: 'wallet-cash', date: '2026-04-22', description: 'Đi chợ', tag: '' },
-    { id: 'tx9', type: 'expense', amount: 210000, categoryId: 'cat-transport', walletId: 'wallet-momo', date: '2026-03-18', description: 'Gửi xe', tag: '' }
+    { id: 'tx1', type: 'income', amount: 15000000, categoryId: 'cat-salary', walletId: 'wallet-vpbank', date: '2026-05-01', time: '08:00', description: 'Lương tháng 5', tag: '' },
+    { id: 'tx2', type: 'expense', amount: 450000, categoryId: 'cat-food', walletId: 'wallet-cash', date: '2026-05-02', time: '11:20', description: 'Ăn trưa cả tuần', tag: '' },
+    { id: 'tx3', type: 'expense', amount: 180000, categoryId: 'cat-transport', walletId: 'wallet-momo', date: '2026-05-03', time: '07:35', description: 'Đổ xăng', tag: '' },
+    { id: 'tx4', type: 'expense', amount: 600000, categoryId: 'cat-bills', walletId: 'wallet-vpbank', date: '2026-05-05', time: '20:10', description: 'Tiền điện nước', tag: 'Định kỳ' },
+    { id: 'tx5', type: 'expense', amount: 320000, categoryId: 'cat-entertainment', walletId: 'wallet-zalo', date: '2026-05-10', time: '18:30', description: 'Xem phim cuối tuần', tag: '' },
+    { id: 'tx6', type: 'income', amount: 2000000, categoryId: 'cat-bonus', walletId: 'wallet-vpbank', date: '2026-04-20', time: '09:00', description: 'Thưởng dự án', tag: '' },
+    { id: 'tx7', type: 'expense', amount: 2920000, categoryId: 'cat-shopping', walletId: 'wallet-vpbank', date: '2026-05-14', time: '16:15', description: 'Mua sắm gia đình', tag: '' },
+    { id: 'tx8', type: 'expense', amount: 300000, categoryId: 'cat-food', walletId: 'wallet-cash', date: '2026-04-22', time: '10:00', description: 'Đi chợ', tag: '' },
+    { id: 'tx9', type: 'expense', amount: 210000, categoryId: 'cat-transport', walletId: 'wallet-momo', date: '2026-03-18', time: '08:45', description: 'Gửi xe', tag: '' }
   ],
   budgets: [
     { id: 'budget-food-2026-05', categoryId: 'cat-food', month: '2026-05', amount: 800000 },
@@ -83,11 +97,20 @@ const DEFAULT_STATE = {
     { id: 'debt3', name: 'Khoản vay laptop', amount: 6200000, type: 'payable', due: '2026-06-18', note: 'Kỳ trả thứ 3' }
   ],
   alerts: [],
-  filters: { ...DEFAULT_FILTERS }
+  filters: { ...DEFAULT_FILTERS },
+  analytics: {
+    tab: 'category',
+    month: '2026-05',
+    year: 2026
+  }
 };
 
 const els = {};
 let state = loadState();
+let authToken = null;
+let isHydratingState = false;
+let syncTimeoutId = null;
+let isSyncingState = false;
 let editingTransactionId = null;
 let editingBudgetId = null;
 let editingGoalId = null;
@@ -95,33 +118,101 @@ let editingWalletId = null;
 let editingDebtId = null;
 let editingCategoryId = null;
 let currentModal = 'transaction';
+let confirmResolver = null;
 
 const sectionMeta = {
   dashboard: { title: 'Dashboard', subtitle: 'Hôm nay bạn chi tiêu gì chưa?' },
-  transactions: { title: 'Lịch sử Giao dịch', subtitle: 'Quản lý và tra cứu lịch sử thu chi.' },
+  transactions: { title: 'Lịch sử Giao dịch', subtitle: 'Quản lý và tra cứu lịch sử thu chi theo nhóm ngày.' },
   wallets: { title: 'Ví & Danh mục', subtitle: 'Quản lý ví, danh mục thu chi và đồng bộ số dư theo giao dịch thực tế.' },
   budgets: { title: 'Hạn mức Chi tiêu', subtitle: 'Theo dõi chi tiêu theo danh mục với cảnh báo ngân sách thông minh.' },
   goals: { title: 'Mục tiêu Tiết kiệm', subtitle: 'Tăng tốc các mục tiêu tài chính cá nhân với progress trực quan.' },
   debts: { title: 'Khoản nợ', subtitle: 'Theo dõi nợ phải trả và phải thu một cách minh bạch.' },
-  analytics: { title: 'Phân tích Tài chính', subtitle: 'Biểu đồ và KPI trực quan để đọc xu hướng chi tiêu trong tháng.' }
+  analytics: { title: 'Phân tích Tài chính', subtitle: 'Biểu đồ và KPI trực quan để đọc xu hướng chi tiêu.' }
 };
 
 function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return structuredClone(DEFAULT_STATE);
-    const parsed = JSON.parse(raw);
-    const merged = { ...structuredClone(DEFAULT_STATE), ...parsed };
-    merged.filters = { ...DEFAULT_FILTERS, ...(parsed?.filters || {}) };
-    merged.wallets = computeWalletBalances((merged.wallets || []).map(wallet => ({ ...wallet, openingBalance: Number(wallet.openingBalance ?? wallet.balance ?? 0) })), merged.transactions || []);
-    return merged;
-  } catch {
-    return structuredClone(DEFAULT_STATE);
-  }
+  return structuredClone(DEFAULT_STATE);
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (isHydratingState || !authToken) return;
+  if (syncTimeoutId) clearTimeout(syncTimeoutId);
+  syncTimeoutId = setTimeout(() => {
+    void syncStateToServer();
+  }, 250);
+}
+
+function saveSession() {
+  const auth = buildStoredSessionPayload(authToken, state.authView);
+  localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
+}
+
+function restoreSession() {
+  try {
+    const raw = localStorage.getItem(AUTH_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    authToken = parsed.token || null;
+    state.authView = parsed.authView || 'login';
+  } catch {
+    authToken = null;
+    state.authView = 'login';
+  }
+}
+
+async function apiRequest(pathname, { method = 'GET', body, skipAuth = false } = {}) {
+  const response = await fetch(`${API_BASE}${pathname}`, {
+    method,
+    headers: {
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...(!skipAuth && authToken ? { Authorization: `Bearer ${authToken}` } : {})
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+
+  const text = await response.text();
+  const json = text ? JSON.parse(text) : null;
+  if (!response.ok) {
+    throw new Error(json?.message || 'Yêu cầu tới máy chủ thất bại');
+  }
+  return json;
+}
+
+async function bootstrapAuthenticatedState() {
+  if (!authToken) return false;
+  try {
+    const me = await apiRequest('/auth/me');
+    const stateRes = await apiRequest('/state');
+    state = { ...structuredClone(DEFAULT_STATE), ...stateRes.state };
+    state.users = [me.user];
+    state.currentUserId = me.user.id;
+    state.filters = { ...DEFAULT_FILTERS, ...(stateRes.state?.filters || {}) };
+    state.analytics = { ...DEFAULT_STATE.analytics, ...(stateRes.state?.analytics || {}) };
+    renderAll();
+    return true;
+  } catch {
+    authToken = null;
+    state = structuredClone(DEFAULT_STATE);
+    saveSession();
+    return false;
+  }
+}
+
+async function syncStateToServer() {
+  if (!authToken || isHydratingState || isSyncingState) return;
+  isSyncingState = true;
+  try {
+    const payload = structuredClone(state);
+    payload.users = [];
+    await apiRequest('/state', {
+      method: 'PUT',
+      body: { state: payload }
+    });
+  } catch (error) {
+    showToast(error.message || 'Không thể đồng bộ dữ liệu', 'danger');
+  } finally {
+    isSyncingState = false;
+  }
 }
 
 function $(selector) {
@@ -138,8 +229,8 @@ function bindElements() {
     summaryAssets: $('#summary-assets'),
     summaryIncome: $('#summary-income'),
     summaryExpense: $('#summary-expense'),
-    summaryBudget: $('#summary-budget'),
-    totalBudgetProgress: $('#total-budget-progress'),
+    summaryBalance: $('#summary-balance'),
+    balanceFoot: $('#balance-foot'),
     incomeCountFoot: $('#income-count-foot'),
     expenseCountFoot: $('#expense-count-foot'),
     dashboardAlertBanner: $('#dashboard-alert-banner'),
@@ -147,12 +238,6 @@ function bindElements() {
     cashflowChart: $('#cashflow-chart'),
     walletGrid: $('#wallet-grid'),
     categoryGrid: $('#category-grid'),
-    categoryForm: $('#category-form'),
-    categoryName: $('#category-name'),
-    categoryType: $('#category-type'),
-    categoryIcon: $('#category-icon'),
-    categorySubmitText: $('#category-submit-text'),
-    categoryError: $('#category-error'),
     budgetGrid: $('#budget-grid'),
     goalGrid: $('#goal-grid'),
     debtList: $('#debt-list'),
@@ -166,7 +251,7 @@ function bindElements() {
     avgExpensePerTx: $('#avg-expense-per-tx'),
     avgExpensePerDay: $('#avg-expense-per-day'),
     savingsTrendChart: $('#savings-trend-chart'),
-    transactionTableBody: $('#transaction-table-body'),
+    transactionGroupList: $('#transaction-group-list'),
     searchInput: $('#search-input'),
     reportMonth: $('#report-month'),
     walletFilter: $('#wallet-filter'),
@@ -225,8 +310,55 @@ function bindElements() {
     debtDue: $('#debt-due'),
     debtNote: $('#debt-note'),
     debtSubmitText: $('#debt-submit-text'),
-    debtError: $('#debt-error')
+    debtError: $('#debt-error'),
+    toastContainer: $('#toast-container'),
+    authOverlay: $('#auth-overlay'),
+    appShell: $('#app-shell'),
+    showLogin: $('#show-login'),
+    showRegister: $('#show-register'),
+    loginForm: $('#login-form'),
+    registerForm: $('#register-form'),
+    forgotPasswordForm: $('#forgot-password-form'),
+    loginEmail: $('#login-email'),
+    loginPassword: $('#login-password'),
+    loginError: $('#login-error'),
+    registerFullname: $('#register-fullname'),
+    registerEmail: $('#register-email'),
+    registerPassword: $('#register-password'),
+    registerConfirmPassword: $('#register-confirm-password'),
+    registerEmailError: $('#register-email-error'),
+    registerError: $('#register-error'),
+    forgotEmail: $('#forgot-email'),
+    forgotPasswordError: $('#forgot-password-error'),
+    showForgotPassword: $('#show-forgot-password'),
+    backToLogin: $('#back-to-login'),
+    userName: $('#user-name'),
+    userRole: $('#user-role'),
+    userAvatar: $('#user-avatar'),
+    logoutBtn: $('#logout-btn'),
+    budgetBadge: $('#budget-badge'),
+    analyticsTabs: Array.from(document.querySelectorAll('.analytics-tab')),
+    analyticsMonth: $('#analytics-month'),
+    analyticsTotalExpense: $('#analytics-total-expense'),
+    analyticsYearLabel: $('#analytics-year-label'),
+    yearlyBarChart: $('#yearly-bar-chart'),
+    yearlyChartDetail: $('#yearly-chart-detail'),
+    analyticsCategoryView: $('#analytics-category-view'),
+    analyticsYearlyView: $('#analytics-yearly-view'),
+    yearPrev: $('#year-prev'),
+    yearNext: $('#year-next'),
+    clickableSummaryCards: Array.from(document.querySelectorAll('.clickable-summary')),
+    confirmBackdrop: $('#confirm-backdrop'),
+    confirmTitle: $('#confirm-title'),
+    confirmMessage: $('#confirm-message'),
+    confirmIcon: $('#confirm-icon'),
+    confirmAccept: $('#confirm-accept'),
+    confirmCancel: $('#confirm-cancel')
   });
+}
+
+function getCurrentUser() {
+  return state.users.find(user => user.id === state.currentUserId) || null;
 }
 
 function walletById(id) {
@@ -262,6 +394,8 @@ function syncFiltersToInputs() {
   state.filters.wallet = setSelectValueWithFallback(els.walletFilter, state.filters.wallet, 'all');
   state.filters.type = setSelectValueWithFallback(els.typeFilter, state.filters.type, 'all');
   state.filters.category = setSelectValueWithFallback(els.categoryFilter, state.filters.category, 'all');
+  els.analyticsMonth.value = state.analytics.month || getSelectedMonth();
+  els.analyticsYearLabel.textContent = String(state.analytics.year);
 }
 
 function syncFiltersFromInputs() {
@@ -318,8 +452,15 @@ function closeModal() {
   resetForms();
 }
 
+function clearAuthFeedback() {
+  [els.loginError, els.registerError, els.registerEmailError, els.forgotPasswordError].forEach(el => {
+    if (el) el.textContent = '';
+  });
+}
+
 function resetForms() {
   [els.transactionForm, els.budgetForm, els.goalForm, els.walletForm, els.categoryForm, els.transferForm, els.debtForm].forEach(form => form.reset());
+  clearAuthFeedback();
   els.transactionType.value = 'expense';
   els.transactionDate.value = todayISO();
   els.budgetMonth.value = getSelectedMonth();
@@ -387,24 +528,87 @@ function filteredTransactions() {
       const categoryName = categoryById(item.categoryId)?.name || '';
       return [item.description, walletName, categoryName, item.tag].join(' ').toLowerCase().includes(search);
     })
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
+    .sort((a, b) => new Date(`${b.date} ${b.time || '00:00'}`) - new Date(`${a.date} ${a.time || '00:00'}`));
+}
+
+function showToast(text, level = 'info') {
+  const toast = document.createElement('div');
+  toast.className = `toast-item ${level}`;
+  toast.textContent = text;
+  els.toastContainer.appendChild(toast);
+  setTimeout(() => toast.classList.add('visible'), 10);
+  setTimeout(() => {
+    toast.classList.remove('visible');
+    setTimeout(() => toast.remove(), 250);
+  }, 3200);
+}
+
+function closeConfirmDialog(accepted = false) {
+  els.confirmBackdrop.classList.add('hidden');
+  els.confirmBackdrop.setAttribute('aria-hidden', 'true');
+  els.confirmBackdrop.querySelector('.confirm-card')?.classList.remove('danger', 'warning');
+  const resolver = confirmResolver;
+  confirmResolver = null;
+  if (resolver) resolver(Boolean(accepted));
+}
+
+function requestConfirmation(kind, payload = {}) {
+  const config = buildConfirmationDialogModel(kind, payload);
+  els.confirmTitle.textContent = config.title;
+  els.confirmMessage.textContent = config.message;
+  els.confirmAccept.textContent = config.confirmText;
+  els.confirmCancel.textContent = config.cancelText;
+  els.confirmIcon.textContent = config.tone === 'danger' ? '🗑️' : '⚠️';
+  const card = els.confirmBackdrop.querySelector('.confirm-card');
+  card?.classList.remove('danger', 'warning');
+  card?.classList.add(config.tone === 'danger' ? 'danger' : 'warning');
+  els.confirmBackdrop.classList.remove('hidden');
+  els.confirmBackdrop.setAttribute('aria-hidden', 'false');
+  return new Promise(resolve => {
+    confirmResolver = resolve;
+  });
+}
+
+function consumeLatestAlert() {
+  if (!state.alerts.length) return;
+  const latest = state.alerts[state.alerts.length - 1];
+  state.alerts = [];
+  showToast(latest.text, latest.level || 'info');
+}
+
+function renderUserCard() {
+  const user = getCurrentUser();
+  if (!user) {
+    els.userName.textContent = 'Chưa đăng nhập';
+    els.userName.title = 'Chưa đăng nhập';
+    els.userRole.textContent = 'Đăng nhập để đồng bộ dữ liệu';
+    els.userRole.title = 'Đăng nhập để đồng bộ dữ liệu';
+    els.userAvatar.textContent = 'U';
+    return;
+  }
+
+  const displayName = String(user.fullName || user.name || user.email || 'User').trim();
+  const displayEmail = String(user.email || '').trim();
+  els.userName.textContent = displayName;
+  els.userName.title = displayName;
+  const roleText = displayEmail ? `Email: ${displayEmail}` : 'Tài khoản SpendWise Pro';
+  els.userRole.textContent = roleText;
+  els.userRole.title = roleText;
+  els.userAvatar.textContent = displayName.slice(0, 1).toUpperCase();
 }
 
 function renderSummary() {
   const month = getSelectedMonth();
   const summary = computeMonthlySummary(state.transactions, month);
   const totalAssets = state.wallets.reduce((sum, item) => sum + Number(item.balance), 0);
-  const budgets = state.budgets.filter(item => item.month === month);
-  const totalBudget = budgets.reduce((sum, item) => sum + Number(item.amount), 0);
-  const budgetUsage = totalBudget ? Math.min((summary.expense / totalBudget) * 100, 100) : 0;
-  const monthTx = state.transactions.filter(item => monthKey(item.date) === month);
   els.summaryAssets.textContent = formatCurrency(totalAssets);
   els.summaryIncome.textContent = formatCurrency(summary.income);
   els.summaryExpense.textContent = formatCurrency(summary.expense);
-  els.summaryBudget.textContent = formatCurrency(totalBudget);
-  els.totalBudgetProgress.style.width = `${budgetUsage}%`;
-  els.incomeCountFoot.textContent = `${monthTx.filter(item => item.type === 'income').length} giao dịch thu`;
-  els.expenseCountFoot.textContent = `${monthTx.filter(item => item.type === 'expense').length} giao dịch chi`;
+  els.summaryBalance.textContent = formatCurrency(summary.balance);
+  els.summaryBalance.className = `metric-value ${summary.balance < 0 ? 'negative' : 'positive'}`;
+  els.balanceFoot.innerHTML = summary.balance < 0 ? '⚠ Số dư âm trong tháng hiện tại' : 'Số dư tháng hiện tại đang tích cực';
+  els.incomeCountFoot.textContent = `${state.transactions.filter(item => monthKey(item.date) === month && item.type === 'income' && item.categoryId !== 'cat-transfer').length} giao dịch thu`;
+  els.expenseCountFoot.textContent = `${state.transactions.filter(item => monthKey(item.date) === month && item.type === 'expense' && item.categoryId !== 'cat-transfer').length} giao dịch chi`;
 }
 
 function renderDashboardAlert() {
@@ -414,22 +618,25 @@ function renderDashboardAlert() {
   if (!strongest) {
     els.dashboardAlertBanner.classList.add('empty');
     els.dashboardAlertBanner.innerHTML = '<strong>Ngân sách ổn định</strong><p>Chưa có danh mục nào gần vượt hạn mức trong tháng này.</p>';
+    els.budgetBadge.classList.add('hidden');
     return;
   }
   els.dashboardAlertBanner.classList.remove('empty');
-  els.dashboardAlertBanner.innerHTML = `<strong>GẦN HẾT HẠN MỨC</strong><p>${strongest.categoryName}: ${formatCurrency(strongest.spent)} / ${formatCurrency(strongest.limit)} (${strongest.usage}%)</p>`;
+  els.dashboardAlertBanner.innerHTML = `<strong>CẢNH BÁO NGÂN SÁCH</strong><p>${strongest.icon} ${strongest.categoryName}: ${formatCurrency(strongest.spent)} / ${formatCurrency(strongest.limit)} (${strongest.usage}%)</p>`;
+  if (strongest.level === 'danger') els.budgetBadge.classList.remove('hidden');
+  else els.budgetBadge.classList.add('hidden');
 }
 
 function renderCashflowChart() {
-  const yearData = aggregateYearlyTotals(state.transactions, 2026).slice(0, 6);
+  const yearData = aggregateYearlyTotals(state.transactions, state.analytics.year);
   const maxValue = Math.max(1, ...yearData.flatMap(item => [item.income, item.expense]));
   els.cashflowChart.innerHTML = yearData.map(item => {
-    const incomeHeight = Math.max(12, (item.income / maxValue) * 170);
-    const expenseHeight = Math.max(12, (item.expense / maxValue) * 170);
+    const incomeHeight = item.income ? Math.max(12, (item.income / maxValue) * 170) : 12;
+    const expenseHeight = item.expense ? Math.max(12, (item.expense / maxValue) * 170) : 12;
     return `
       <div class="bar-month-group">
         <div class="bar-col income" style="height:${incomeHeight}px"></div>
-        <div class="bar-col expense" style="height:${expenseHeight}px"></div>
+        <div class="bar-col expense ${item.balance < 0 ? 'negative-outline' : ''}" style="height:${expenseHeight}px"></div>
         <div class="bar-month-label">${item.label}</div>
       </div>`;
   }).join('');
@@ -465,9 +672,9 @@ function renderWalletGrid() {
     </article>`).join('');
 
   const categoryCards = sortCategories(state.categories.filter(item => item.id !== 'cat-transfer')).map(item => {
-    const linkedTransactions = state.transactions.filter(tx => tx.categoryId === item.id && monthKey(tx.date) === month).length;
-    const linkedBudgets = state.budgets.filter(budget => budget.categoryId === item.id && budget.month === month).length;
-    const canDelete = state.transactions.filter(tx => tx.categoryId === item.id).length === 0 && state.budgets.filter(budget => budget.categoryId === item.id).length === 0;
+    const linkedTransactions = state.transactions.filter(tx => tx.categoryId === item.id).length;
+    const linkedBudgets = state.budgets.filter(budget => budget.categoryId === item.id).length;
+    const canDelete = linkedTransactions === 0 && linkedBudgets === 0;
     return `
       <article class="wallet-card category-card">
         <div class="wallet-card-top">
@@ -479,7 +686,7 @@ function renderWalletGrid() {
         </div>
         <div class="wallet-title">${item.name}</div>
         <div class="wallet-balance">${item.type === 'income' ? 'Danh mục Thu' : 'Danh mục Chi'}</div>
-        <div class="wallet-kind">${linkedTransactions} giao dịch tháng • ${linkedBudgets} hạn mức tháng</div>
+        <div class="wallet-kind">${state.transactions.filter(tx => tx.categoryId === item.id && monthKey(tx.date) === month).length} giao dịch tháng • ${state.budgets.filter(budget => budget.categoryId === item.id && budget.month === month).length} hạn mức tháng</div>
       </article>`;
   }).join('') || '<div class="empty-state">Chưa có danh mục tuỳ chỉnh nào.</div>';
 
@@ -488,24 +695,39 @@ function renderWalletGrid() {
 
 function renderBudgetGrid() {
   const month = getSelectedMonth();
-  const statuses = computeBudgetStatuses(state.categories, state.transactions, state.budgets.filter(item => item.month === month), month);
-  els.budgetGrid.innerHTML = statuses.map(item => {
+  const overview = buildBudgetOverview(state.categories, state.transactions, state.budgets, month);
+  els.budgetGrid.innerHTML = overview.map(item => {
     const budget = state.budgets.find(entry => entry.categoryId === item.categoryId && entry.month === month);
+    if (!item.hasBudget) {
+      return `
+        <article class="budget-card unconfigured">
+          <div class="budget-card-top">
+            <div>
+              <div class="budget-title">${item.icon} ${item.categoryName}</div>
+              <div class="budget-amount empty-budget">Chưa thiết lập</div>
+            </div>
+            <div class="inline-actions">
+              <button class="icon-square edit" data-create-budget="${item.categoryId}">＋</button>
+            </div>
+          </div>
+          <div class="budget-footer"><strong>${formatCurrency(item.spent)}</strong><span class="budget-date">Đã chi trong tháng</span></div>
+        </article>`;
+    }
     return `
-    <article class="budget-card">
-      <div class="budget-card-top">
-        <div>
-          <div class="budget-title">${item.icon} ${item.categoryName}</div>
-          <div class="budget-amount">${formatCurrency(item.spent)} / ${formatCurrency(item.limit)}</div>
+      <article class="budget-card">
+        <div class="budget-card-top">
+          <div>
+            <div class="budget-title">${item.level === 'warning' || item.level === 'critical' || item.level === 'danger' ? '⚠️ ' : ''}${item.icon} ${item.categoryName}</div>
+            <div class="budget-amount">${formatCurrency(item.limit)}</div>
+          </div>
+          <div class="inline-actions">
+            <button class="icon-square edit" data-edit-budget="${budget?.id || ''}">✎</button>
+            <button class="icon-square delete" data-budget-delete="${budget?.id || ''}">🗑</button>
+          </div>
         </div>
-        <div class="inline-actions">
-          <button class="icon-square edit" data-edit-budget="${budget?.id || ''}">✎</button>
-          <button class="icon-square delete" data-budget-delete="${budget?.id || ''}">🗑</button>
-        </div>
-      </div>
-      <div class="progress-track"><div class="progress-fill ${item.level === 'safe' ? 'safe' : item.level}" style="width:${Math.min(item.usage,100)}%"></div></div>
-      <div class="budget-footer"><strong>${item.usage}%</strong><span class="budget-date">Còn lại ${formatCurrency(item.remaining)}</span></div>
-    </article>`;
+        <div class="progress-track"><div class="progress-fill ${item.level === 'safe' ? 'safe' : item.level}" style="width:${Math.min(item.usage, 100)}%"></div></div>
+        <div class="budget-footer"><strong>${item.usage}%</strong><span class="budget-date">${formatCurrency(item.spent)} / ${formatCurrency(item.limit)} • Còn lại ${formatCurrency(item.remaining)}</span></div>
+      </article>`;
   }).join('') || '<div class="empty-state">Chưa có hạn mức cho tháng đang xem.</div>';
 }
 
@@ -551,42 +773,57 @@ function renderDebtSection() {
     </article>`).join('') || '<div class="empty-state">Chưa có khoản nợ nào.</div>';
 }
 
-function renderTransactionTable() {
+function renderTransactionGroups() {
   const txs = filteredTransactions();
-  els.transactionTableBody.innerHTML = txs.map(item => {
-    const wallet = walletById(item.walletId);
-    const category = categoryById(item.categoryId);
-    return `
-      <tr>
-        <td>${item.date}</td>
-        <td><span class="wallet-chip">${wallet?.icon || '💼'} ${wallet?.name || 'Không xác định'}</span></td>
-        <td><span class="category-chip">${category?.icon || '❓'} ${category?.name || 'Không xác định'}</span></td>
-        <td>
-          <div>${item.description || 'Không có mô tả'}</div>
-          ${item.tag ? `<span class="badge-chip recurring">${item.tag}</span>` : ''}
-        </td>
-        <td><span class="type-chip ${item.type}">${item.type === 'income' ? 'Thu' : 'Chi'}</span></td>
-        <td class="${item.type === 'income' ? 'positive' : 'negative'}"><strong>${item.type === 'income' ? '+' : '-'}${formatCurrency(item.amount)}</strong></td>
-        <td>
-          <div class="row-actions">
-            ${item.transferId ? '' : `<button class="icon-square edit" data-edit-transaction="${item.id}">✎</button>`}
-            <button class="icon-square delete" data-delete-transaction="${item.id}">🗑</button>
-          </div>
-        </td>
-      </tr>`;
-  }).join('') || '<tr><td colspan="7"><div class="empty-state">Không có giao dịch phù hợp bộ lọc.</div></td></tr>';
+  if (!txs.length) {
+    els.transactionGroupList.innerHTML = '<div class="empty-state">Chưa có giao dịch nào. Nhấn + để bắt đầu ghi chép.</div>';
+    return;
+  }
+  const groups = groupTransactionsByDate(txs);
+  els.transactionGroupList.innerHTML = groups.map(group => `
+    <div class="transaction-day-group">
+      <div class="transaction-day-header">${group.label}</div>
+      <div class="transaction-day-items">
+        ${group.items.map(item => {
+          const wallet = walletById(item.walletId);
+          const category = categoryById(item.categoryId);
+          return `
+            <article class="transaction-row-card">
+              <button class="transaction-main-button" data-edit-transaction="${item.id}">
+                <div class="tx-left">
+                  <div class="wallet-icon-box small">${category?.icon || '❓'}</div>
+                  <div>
+                    <strong>${category?.name || 'Không xác định'}</strong>
+                    <div class="meta">${item.description || 'Không có mô tả'} • ${wallet?.name || 'Không xác định'}</div>
+                  </div>
+                </div>
+                <div class="tx-right">
+                  <strong class="${item.type === 'income' ? 'positive' : 'negative'}">${item.type === 'income' ? '+' : '-'}${formatCurrency(item.amount)}</strong>
+                  <span class="meta">${item.time || '00:00'}</span>
+                </div>
+              </button>
+              <div class="row-actions wrap-right">
+                ${item.tag ? `<span class="badge-chip recurring">${item.tag}</span>` : ''}
+                <button class="icon-square edit" data-edit-transaction="${item.id}" ${item.transferId ? 'disabled' : ''}>✎</button>
+                <button class="icon-square delete" data-delete-transaction="${item.id}">🗑</button>
+              </div>
+            </article>`;
+        }).join('')}
+      </div>
+    </div>`).join('');
 }
 
 function renderAnalytics() {
-  const month = getSelectedMonth();
-  const expenseData = aggregateExpenseByCategory(state.transactions.filter(item => categoryById(item.categoryId)?.id !== 'cat-transfer'), state.categories, month);
+  const month = state.analytics.month || getSelectedMonth();
+  const expenseData = aggregateExpenseByCategory(state.transactions, state.categories, month);
   renderDonut(expenseData, els.analyticsDonut, els.analyticsDonutLegend);
   renderSavingsTrend();
   const totalExpense = expenseData.reduce((sum, item) => sum + item.amount, 0);
+  els.analyticsTotalExpense.textContent = formatCurrency(totalExpense);
   const expenseTx = state.transactions.filter(item => monthKey(item.date) === month && item.type === 'expense' && item.categoryId !== 'cat-transfer');
   const avgPerTx = expenseTx.length ? Math.round(totalExpense / expenseTx.length) : 0;
   const uniqueDays = new Set(expenseTx.map(item => item.date)).size || 1;
-  const avgPerDay = Math.round(totalExpense / uniqueDays);
+  const avgPerDay = expenseTx.length ? Math.round(totalExpense / uniqueDays) : 0;
   els.avgExpensePerTx.textContent = formatCurrency(avgPerTx);
   els.avgExpensePerDay.textContent = formatCurrency(avgPerDay);
   if (expenseData[0]) {
@@ -595,14 +832,20 @@ function renderAnalytics() {
     els.topCategoryCard.innerHTML = 'Không có dữ liệu';
   }
   const monthStatuses = computeBudgetStatuses(state.categories, state.transactions, state.budgets.filter(item => item.month === month), month);
-  const strongest = monthStatuses.find(item => item.level === 'danger') || monthStatuses.find(item => item.level === 'critical') || monthStatuses[0];
+  const strongest = monthStatuses.find(item => item.level === 'danger') || monthStatuses.find(item => item.level === 'critical') || monthStatuses.find(item => item.level === 'warning');
   els.analyticsAlertCard.innerHTML = strongest ? `<strong>${strongest.categoryName}</strong><div style="margin-top:8px;color:var(--gold-2);font-weight:800">${formatCurrency(strongest.spent)} / ${formatCurrency(strongest.limit)} (${strongest.usage}%)</div>` : 'Không có cảnh báo ngân sách';
+
+  els.analyticsCategoryView.classList.toggle('active-analytics-view', state.analytics.tab === 'category');
+  els.analyticsYearlyView.classList.toggle('active-analytics-view', state.analytics.tab === 'yearly');
+  els.analyticsTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.analyticsTab === state.analytics.tab));
+  els.analyticsYearLabel.textContent = String(state.analytics.year);
+  renderYearlyChart();
 }
 
 function renderDonut(data, svgEl, legendEl) {
   if (!data.length) {
     svgEl.innerHTML = '<text x="110" y="110" text-anchor="middle" fill="#94a3b8">Không có dữ liệu</text>';
-    legendEl.innerHTML = '<div class="empty-state">Tháng này chưa có giao dịch chi.</div>';
+    legendEl.innerHTML = '<div class="empty-state">Không có dữ liệu chi tiêu tháng này.</div>';
     return;
   }
   const colors = ['#3e7be0', '#19b889', '#5b5ce2', '#d93e95', '#f04267', '#f6bf22', '#35c8a0'];
@@ -615,11 +858,11 @@ function renderDonut(data, svgEl, legendEl) {
     const ratio = item.amount / total;
     const dash = ratio * circumference;
     const gap = circumference - dash;
-    const segment = `<circle r="${radius}" cx="${center}" cy="${center}" fill="transparent" stroke="${colors[index % colors.length]}" stroke-width="26" stroke-dasharray="${dash} ${gap}" stroke-dashoffset="${-start}" transform="rotate(-90 ${center} ${center})"></circle>`;
+    const segment = `<circle data-tooltip="${item.icon} ${item.name}: ${formatCurrency(item.amount)} (${item.percent}%)" r="${radius}" cx="${center}" cy="${center}" fill="transparent" stroke="${colors[index % colors.length]}" stroke-width="26" stroke-dasharray="${dash} ${gap}" stroke-dashoffset="${-start}" transform="rotate(-90 ${center} ${center})"></circle>`;
     start += dash;
     return segment;
-  }).join('') + `<circle r="44" cx="${center}" cy="${center}" fill="#0f172a"></circle><text x="110" y="105" text-anchor="middle" fill="#e2e8f0" font-size="15">Tổng chi</text><text x="110" y="128" text-anchor="middle" fill="#f8fafc" font-size="18" font-weight="800">${Math.round(total/1000)}k</text>`;
-  legendEl.innerHTML = data.map((item, index) => `<div class="legend-row"><span class="legend-bullet" style="background:${colors[index % colors.length]}"></span><span>${item.icon} ${item.name}</span><span>${item.percent}%</span></div>`).join('');
+  }).join('') + `<circle r="44" cx="${center}" cy="${center}" fill="#0f172a"></circle><text x="110" y="105" text-anchor="middle" fill="#e2e8f0" font-size="15">Tổng chi</text><text x="110" y="128" text-anchor="middle" fill="#f8fafc" font-size="18" font-weight="800">${Math.round(total / 1000)}k</text>`;
+  legendEl.innerHTML = data.map((item, index) => `<div class="legend-row" title="${item.name}: ${formatCurrency(item.amount)} (${item.percent}%)"><span class="legend-bullet" style="background:${colors[index % colors.length]}"></span><span>${item.icon} ${item.name}</span><span>${formatCurrency(item.amount)} • ${item.percent}%</span></div>`).join('');
 }
 
 function renderSavingsTrend() {
@@ -653,9 +896,26 @@ function renderSavingsTrend() {
     ${labels.map((label, i) => `<text x="${padX + i * xStep}" y="${height - 6}" fill="#94a3b8" font-size="12" text-anchor="middle">${label}</text>`).join('')}`;
 }
 
+function renderYearlyChart() {
+  const yearData = aggregateYearlyTotals(state.transactions, state.analytics.year);
+  const maxValue = Math.max(1, ...yearData.flatMap(item => [item.income, item.expense]));
+  els.yearlyBarChart.innerHTML = yearData.map(item => {
+    const incomeHeight = item.income ? Math.max(10, (item.income / maxValue) * 180) : 10;
+    const expenseHeight = item.expense ? Math.max(10, (item.expense / maxValue) * 180) : 10;
+    return `
+      <button class="bar-month-group yearly-selectable" data-year-month="${item.monthIndex}">
+        <div class="bar-col income" style="height:${incomeHeight}px" title="Thu: ${formatCurrency(item.income)}"></div>
+        <div class="bar-col expense ${item.balance < 0 ? 'negative-outline' : ''}" style="height:${expenseHeight}px" title="Chi: ${formatCurrency(item.expense)}"></div>
+        <div class="bar-month-label">${item.label}</div>
+      </button>`;
+  }).join('');
+}
+
 function renderAll() {
+  if (isHydratingState) return;
   recalculateWalletBalances();
   syncSelectors();
+  renderUserCard();
   renderSummary();
   renderDashboardAlert();
   renderCashflowChart();
@@ -664,25 +924,55 @@ function renderAll() {
   renderBudgetGrid();
   renderGoalGrid();
   renderDebtSection();
-  renderTransactionTable();
+  renderTransactionGroups();
   renderAnalytics();
   saveState();
+  saveSession();
+  consumeLatestAlert();
 }
-
 function handleTransactionSubmit(event) {
   event.preventDefault();
+  void (async () => {
+    els.transactionError.textContent = '';
+    const validation = validateTransaction(state.categories, {
+      type: els.transactionType.value,
+      amount: els.transactionAmount.value,
+      categoryId: els.transactionCategory.value,
+      date: els.transactionDate.value,
+      description: els.transactionDescription.value,
+      time: editingTransactionId ? (state.transactions.find(item => item.id === editingTransactionId)?.time || nowTimeHHMM()) : nowTimeHHMM()
+    });
+    if (!validation.ok) {
+      if (validation.code === 'future_date_confirmation') {
+        const accepted = await requestConfirmation('future-transaction');
+        if (!accepted) return;
+        return submitTransactionWithOverride();
+      }
+      els.transactionError.textContent = validation.message;
+      return;
+    }
+    applyTransactionPayload(validation.data);
+  })();
+}
+
+function submitTransactionWithOverride() {
   const validation = validateTransaction(state.categories, {
     type: els.transactionType.value,
     amount: els.transactionAmount.value,
     categoryId: els.transactionCategory.value,
     date: els.transactionDate.value,
-    description: els.transactionDescription.value
-  });
+    description: els.transactionDescription.value,
+    time: editingTransactionId ? (state.transactions.find(item => item.id === editingTransactionId)?.time || nowTimeHHMM()) : nowTimeHHMM()
+  }, { allowFuture: true });
   if (!validation.ok) {
     els.transactionError.textContent = validation.message;
     return;
   }
-  const payload = { ...validation.data, walletId: els.transactionWallet.value, tag: els.transactionRecurring.value };
+  applyTransactionPayload(validation.data);
+}
+
+function applyTransactionPayload(validationData) {
+  const payload = { ...validationData, walletId: els.transactionWallet.value, tag: els.transactionRecurring.value };
   let tx;
   if (editingTransactionId) {
     state.transactions = state.transactions.map(item => item.id === editingTransactionId ? { ...item, ...payload } : item);
@@ -816,30 +1106,12 @@ function handleTransferSubmit(event) {
 
   state.transactions.push(
     {
-      id: createId('tx'),
-      transferId,
-      transferRole: 'out',
-      linkedWalletId: toWalletId,
-      type: 'expense',
-      amount,
-      categoryId: 'cat-transfer',
-      walletId: fromWalletId,
-      date,
-      description,
-      tag: 'Chuyển ví'
+      id: createId('tx'), transferId, transferRole: 'out', linkedWalletId: toWalletId, type: 'expense', amount,
+      categoryId: 'cat-transfer', walletId: fromWalletId, date, time: nowTimeHHMM(), description, tag: 'Chuyển ví'
     },
     {
-      id: createId('tx'),
-      transferId,
-      transferRole: 'in',
-      linkedWalletId: fromWalletId,
-      type: 'income',
-      amount,
-      categoryId: 'cat-transfer',
-      walletId: toWalletId,
-      date,
-      description,
-      tag: 'Chuyển ví'
+      id: createId('tx'), transferId, transferRole: 'in', linkedWalletId: fromWalletId, type: 'income', amount,
+      categoryId: 'cat-transfer', walletId: toWalletId, date, time: nowTimeHHMM(), description, tag: 'Chuyển ví'
     }
   );
 
@@ -877,7 +1149,7 @@ function editTransaction(id) {
   const tx = state.transactions.find(item => item.id === id);
   if (!tx) return;
   if (tx.transferId) {
-    alert('Giao dịch chuyển tiền không chỉnh sửa trực tiếp. Vui lòng xóa cặp chuyển tiền và tạo lại.');
+    showToast('Giao dịch chuyển tiền không chỉnh sửa trực tiếp. Vui lòng xóa cặp chuyển tiền và tạo lại.', 'warning');
     return;
   }
   clearEditingState();
@@ -939,22 +1211,24 @@ function editCategory(id) {
   editingCategoryId = id;
   els.categoryName.value = category.name;
   els.categoryType.value = category.type;
+  els.categoryType.disabled = true;
   els.categoryIcon.value = category.icon;
   els.categorySubmitText.textContent = 'Cập nhật danh mục';
   openModal('category');
 }
 
 function deleteCategory(id) {
-  const result = deleteCategoryById(state.categories, id, state.transactions, state.budgets);
-  if (!result.ok) {
-    clearEditingState();
-    openModal('category');
-    els.categoryError.textContent = result.message;
-    return;
-  }
-  if (!confirm(`Xóa danh mục ${result.category.name}?`)) return;
-  state.categories = result.categories;
-  renderAll();
+  void (async () => {
+    const result = deleteCategoryById(state.categories, id, state.transactions, state.budgets);
+    if (!result.ok) {
+      showToast(result.message, 'warning');
+      return;
+    }
+    const accepted = await requestConfirmation('delete-category', { categoryName: result.category.name });
+    if (!accepted) return;
+    state.categories = result.categories;
+    renderAll();
+  })();
 }
 
 function editDebt(id) {
@@ -972,65 +1246,80 @@ function editDebt(id) {
 }
 
 function deleteTransaction(id) {
-  const tx = state.transactions.find(item => item.id === id);
-  if (!tx) return;
-  const isTransfer = Boolean(tx.transferId);
-  const message = isTransfer
-    ? `Xóa giao dịch chuyển tiền ${tx.description || tx.id}? Hệ thống sẽ xóa cả 2 bút toán liên kết.`
-    : `Xóa giao dịch ${tx.description || tx.id}?`;
-  if (!confirm(message)) return;
-  state.transactions = isTransfer
-    ? state.transactions.filter(item => item.transferId !== tx.transferId)
-    : state.transactions.filter(item => item.id !== id);
-  recalculateWalletBalances();
-  renderAll();
+  void (async () => {
+    const tx = state.transactions.find(item => item.id === id);
+    if (!tx) return;
+    const label = categoryById(tx.categoryId)?.name || tx.description || tx.id;
+    const isTransfer = Boolean(tx.transferId);
+    const accepted = isTransfer
+      ? await requestConfirmation('delete-transaction-transfer', { description: tx.description || tx.id })
+      : await requestConfirmation('delete-transaction', { label, amountText: formatCurrency(tx.amount) });
+    if (!accepted) return;
+    state.transactions = isTransfer
+      ? state.transactions.filter(item => item.transferId !== tx.transferId)
+      : state.transactions.filter(item => item.id !== id);
+    recalculateWalletBalances();
+    renderAll();
+  })();
 }
 
 function deleteBudget(id) {
-  const result = deleteBudgetById(state.budgets, id);
-  if (!result.ok) return;
-  if (!confirm(`Xóa hạn mức ${result.budget.categoryId} cho tháng ${result.budget.month}?`)) return;
-  state.budgets = result.budgets;
-  renderAll();
+  void (async () => {
+    const result = deleteBudgetById(state.budgets, id);
+    if (!result.ok) return;
+    const categoryName = categoryById(result.budget.categoryId)?.name || result.budget.categoryId;
+    const accepted = await requestConfirmation('delete-budget', { categoryName });
+    if (!accepted) return;
+    state.budgets = result.budgets;
+    renderAll();
+  })();
 }
 
 function deleteGoal(id) {
-  const result = deleteGoalById(state.goals, id);
-  if (!result.ok) return;
-  if (!confirm(`Xóa mục tiêu ${result.goal.name}?`)) return;
-  state.goals = result.goals;
-  renderAll();
+  void (async () => {
+    const result = deleteGoalById(state.goals, id);
+    if (!result.ok) return;
+    const accepted = await requestConfirmation('delete-goal', { goalName: result.goal.name });
+    if (!accepted) return;
+    state.goals = result.goals;
+    renderAll();
+  })();
 }
 
 function deleteWallet(id) {
-  const wallet = state.wallets.find(item => item.id === id);
-  if (!wallet) return;
-  const used = state.transactions.some(item => item.walletId === id);
-  if (used) {
-    els.walletError.textContent = 'Không thể xóa ví đã phát sinh giao dịch';
-    openModal('wallet');
-    return;
-  }
-  if (!confirm(`Xóa ví ${wallet.name}?`)) return;
-  state.wallets = state.wallets.filter(item => item.id !== id);
-  renderAll();
+  void (async () => {
+    const wallet = state.wallets.find(item => item.id === id);
+    if (!wallet) return;
+    const used = state.transactions.some(item => item.walletId === id);
+    if (used) {
+      showToast('Không thể xóa ví đã phát sinh giao dịch', 'warning');
+      return;
+    }
+    const accepted = await requestConfirmation('delete-wallet', { walletName: wallet.name });
+    if (!accepted) return;
+    state.wallets = state.wallets.filter(item => item.id !== id);
+    renderAll();
+  })();
 }
 
 function deleteDebt(id) {
-  const debt = state.debts.find(item => item.id === id);
-  if (!debt) return;
-  if (!confirm(`Xóa khoản nợ ${debt.name}?`)) return;
-  state.debts = state.debts.filter(item => item.id !== id);
-  renderAll();
+  void (async () => {
+    const debt = state.debts.find(item => item.id === id);
+    if (!debt) return;
+    const accepted = await requestConfirmation('delete-debt', { debtName: debt.name });
+    if (!accepted) return;
+    state.debts = state.debts.filter(item => item.id !== id);
+    renderAll();
+  })();
 }
 
 function exportTransactions() {
   const rows = filteredTransactions().map(item => {
     const wallet = walletById(item.walletId)?.name || '';
     const category = categoryById(item.categoryId)?.name || '';
-    return [item.date, wallet, category, item.description, item.type, item.amount, item.tag || ''].join(',');
+    return [item.date, item.time || '', wallet, category, item.description, item.type, item.amount, item.tag || ''].join(',');
   });
-  const csv = ['Ngay,Vi,Danh muc,Mo ta,Loai,So tien,Nhan', ...rows].join('\n');
+  const csv = ['Ngay,Gio,Vi,Danh muc,Mo ta,Loai,So tien,Nhan', ...rows].join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1040,6 +1329,163 @@ function exportTransactions() {
   URL.revokeObjectURL(url);
 }
 
+function openBudgetCreateForCategory(categoryId) {
+  clearEditingState();
+  openModal('budget');
+  els.budgetCategory.value = categoryId;
+  els.budgetMonth.value = getSelectedMonth();
+}
+
+function openTransactionsByType(type) {
+  state.filters.type = type === 'balance' ? 'all' : type;
+  setActiveSection('transactions');
+  renderAll();
+}
+
+function setAuthView(view) {
+  state.authView = view;
+  clearAuthFeedback();
+  els.loginForm.classList.toggle('hidden-auth-form', view !== 'login');
+  els.loginForm.classList.toggle('active-auth-form', view === 'login');
+  els.registerForm.classList.toggle('hidden-auth-form', view !== 'register');
+  els.registerForm.classList.toggle('active-auth-form', view === 'register');
+  els.forgotPasswordForm.classList.toggle('hidden-auth-form', view !== 'forgot');
+  els.forgotPasswordForm.classList.toggle('active-auth-form', view === 'forgot');
+  els.showLogin.classList.toggle('active', view === 'login');
+  els.showRegister.classList.toggle('active', view === 'register');
+  saveSession();
+}
+
+function updateAuthVisibility() {
+  const loggedIn = Boolean(getCurrentUser());
+  els.authOverlay.classList.toggle('hidden', loggedIn);
+  els.appShell.classList.toggle('app-disabled', !loggedIn);
+  if (!loggedIn) setAuthView(state.authView || 'login');
+}
+
+function handleRegisterEmailBlur() {
+  const email = els.registerEmail.value.trim();
+  if (!email) {
+    els.registerEmailError.textContent = '';
+    return;
+  }
+  els.registerEmailError.textContent = validateEmail(email) ? '' : 'Email không hợp lệ';
+}
+
+function handleRegisterSubmit(event) {
+  event.preventDefault();
+  void (async () => {
+    try {
+      const result = await apiRequest('/auth/register', {
+        method: 'POST',
+        skipAuth: true,
+        body: {
+          fullName: els.registerFullname.value,
+          email: els.registerEmail.value,
+          password: els.registerPassword.value,
+          confirmPassword: els.registerConfirmPassword.value
+        }
+      });
+      authToken = result.token;
+      state = { ...structuredClone(DEFAULT_STATE), ...result.state };
+      state.users = [result.user];
+      state.currentUserId = result.user.id;
+      state.authView = 'login';
+      saveSession();
+      updateAuthVisibility();
+      renderAll();
+      showToast(`Chào mừng ${result.user.fullName}!`, 'safe');
+    } catch (error) {
+      clearAuthFeedback();
+      els.registerError.textContent = error.message;
+      if (/Email/i.test(error.message)) els.registerEmailError.textContent = error.message;
+    }
+  })();
+}
+
+function handleLoginSubmit(event) {
+  event.preventDefault();
+  void (async () => {
+    try {
+      const result = await apiRequest('/auth/login', {
+        method: 'POST',
+        skipAuth: true,
+        body: {
+          email: els.loginEmail.value,
+          password: els.loginPassword.value
+        }
+      });
+      authToken = result.token;
+      state = { ...structuredClone(DEFAULT_STATE), ...result.state };
+      state.users = [result.user];
+      state.currentUserId = result.user.id;
+      saveSession();
+      updateAuthVisibility();
+      renderAll();
+      showToast(`Xin chào ${result.user.fullName}!`, 'safe');
+    } catch (error) {
+      clearAuthFeedback();
+      els.loginError.textContent = error.message;
+    }
+  })();
+}
+
+function handleForgotPasswordSubmit(event) {
+  event.preventDefault();
+  void (async () => {
+    try {
+      const result = await apiRequest('/auth/forgot-password', {
+        method: 'POST',
+        skipAuth: true,
+        body: { email: els.forgotEmail.value }
+      });
+      clearAuthFeedback();
+      showToast(result.message, 'warning');
+      setAuthView('login');
+    } catch (error) {
+      clearAuthFeedback();
+      els.forgotPasswordError.textContent = error.message;
+    }
+  })();
+}
+
+async function logout() {
+  const accepted = await requestConfirmation('logout-account');
+  if (!accepted) return;
+
+  try {
+    if (authToken) {
+      await apiRequest('/auth/logout', { method: 'POST' });
+    }
+  } catch {
+    // noop
+  } finally {
+    authToken = null;
+    state = structuredClone(DEFAULT_STATE);
+    state.authView = 'login';
+    clearAuthFeedback();
+    saveSession();
+    updateAuthVisibility();
+    renderAll();
+    showToast('Đã đăng xuất tài khoản', 'warning');
+  }
+}
+
+function showYearDetail(monthIndex) {
+  const item = aggregateYearlyTotals(state.transactions, state.analytics.year)[Number(monthIndex)];
+  if (!item) return;
+  els.yearlyChartDetail.innerHTML = `<strong>${item.label}/${state.analytics.year}</strong><br/>Tổng thu: ${formatCurrency(item.income)}<br/>Tổng chi: ${formatCurrency(item.expense)}<br/>Số dư: ${formatCurrency(item.balance)}`;
+}
+
+function cycleAnalyticsYear(direction) {
+  const years = getAvailableYears(state.transactions, state.analytics.year);
+  const currentIndex = years.indexOf(state.analytics.year);
+  if (currentIndex === -1) return;
+  const nextIndex = Math.min(Math.max(currentIndex + direction, 0), years.length - 1);
+  state.analytics.year = years[nextIndex];
+  renderAll();
+}
+
 function attachEvents() {
   els.navButtons.forEach(btn => btn.addEventListener('click', () => setActiveSection(btn.dataset.section)));
   els.jumpButtons.forEach(btn => btn.addEventListener('click', () => setActiveSection(btn.dataset.jump)));
@@ -1047,11 +1493,14 @@ function attachEvents() {
   $('#open-quick-action').addEventListener('click', () => setActiveSection('transactions'));
   $('#close-modal').addEventListener('click', closeModal);
   els.modalBackdrop.addEventListener('click', (e) => { if (e.target === els.modalBackdrop) closeModal(); });
+  els.confirmCancel.addEventListener('click', () => closeConfirmDialog(false));
+  els.confirmAccept.addEventListener('click', () => closeConfirmDialog(true));
+  els.confirmBackdrop.addEventListener('click', (e) => { if (e.target === els.confirmBackdrop) closeConfirmDialog(false); });
   $('#new-budget-btn').addEventListener('click', () => { clearEditingState(); openModal('budget'); });
   $('#new-goal-btn').addEventListener('click', () => { clearEditingState(); openModal('goal'); });
   $('#new-debt-btn').addEventListener('click', () => { clearEditingState(); openModal('debt'); });
   $('#add-wallet-btn').addEventListener('click', () => { clearEditingState(); openModal('wallet'); });
-  $('#new-category-btn').addEventListener('click', () => { clearEditingState(); openModal('category'); });
+  $('#new-category-btn').addEventListener('click', () => { clearEditingState(); els.categoryType.disabled = false; openModal('category'); });
   $('#transfer-wallet-btn').addEventListener('click', () => { clearEditingState(); openModal('transfer'); });
   els.transactionType.addEventListener('change', syncSelectors);
   els.transactionForm.addEventListener('submit', handleTransactionSubmit);
@@ -1061,22 +1510,47 @@ function attachEvents() {
   els.categoryForm.addEventListener('submit', handleCategorySubmit);
   els.transferForm.addEventListener('submit', handleTransferSubmit);
   els.debtForm.addEventListener('submit', handleDebtSubmit);
-  const filterInputs = [els.searchInput, els.reportMonth, els.walletFilter, els.typeFilter, els.categoryFilter];
-  filterInputs.forEach(el => el.addEventListener('input', () => {
-    syncFiltersFromInputs();
-    renderAll();
-  }));
-  filterInputs.forEach(el => el.addEventListener('change', () => {
-    syncFiltersFromInputs();
-    renderAll();
-  }));
+
+  [els.searchInput, els.reportMonth, els.walletFilter, els.typeFilter, els.categoryFilter].forEach(el => {
+    el.addEventListener('input', () => { syncFiltersFromInputs(); renderAll(); });
+    el.addEventListener('change', () => { syncFiltersFromInputs(); renderAll(); });
+  });
+
   $('#reset-demo-data').addEventListener('click', () => {
-    if (!confirm('Khôi phục dữ liệu demo mặc định?')) return;
-    state = structuredClone(DEFAULT_STATE);
-    resetForms();
+    void (async () => {
+      const accepted = await requestConfirmation('reset-demo-data');
+      if (!accepted) return;
+      state = structuredClone(DEFAULT_STATE);
+      restoreSession();
+      renderAll();
+      updateAuthVisibility();
+    })();
+  });
+
+  $('#export-transactions').addEventListener('click', exportTransactions);
+
+  els.showLogin.addEventListener('click', () => setAuthView('login'));
+  els.showRegister.addEventListener('click', () => setAuthView('register'));
+  els.showForgotPassword.addEventListener('click', () => setAuthView('forgot'));
+  els.backToLogin.addEventListener('click', () => setAuthView('login'));
+  els.registerEmail.addEventListener('blur', handleRegisterEmailBlur);
+  els.registerForm.addEventListener('submit', handleRegisterSubmit);
+  els.loginForm.addEventListener('submit', handleLoginSubmit);
+  els.forgotPasswordForm.addEventListener('submit', handleForgotPasswordSubmit);
+  els.logoutBtn.addEventListener('click', logout);
+
+  els.analyticsTabs.forEach(tab => tab.addEventListener('click', () => {
+    state.analytics.tab = tab.dataset.analyticsTab;
+    renderAll();
+  }));
+  els.analyticsMonth.addEventListener('change', () => {
+    state.analytics.month = els.analyticsMonth.value || getSelectedMonth();
     renderAll();
   });
-  $('#export-transactions').addEventListener('click', exportTransactions);
+  els.yearPrev.addEventListener('click', () => cycleAnalyticsYear(1));
+  els.yearNext.addEventListener('click', () => cycleAnalyticsYear(-1));
+  els.clickableSummaryCards.forEach(card => card.addEventListener('click', () => openTransactionsByType(card.dataset.summaryFilter)));
+
   document.body.addEventListener('click', (event) => {
     const editId = event.target.closest('[data-edit-transaction]')?.dataset.editTransaction;
     if (editId) editTransaction(editId);
@@ -1086,6 +1560,8 @@ function attachEvents() {
     if (deleteBudgetId) deleteBudget(deleteBudgetId);
     const editBudgetId = event.target.closest('[data-edit-budget]')?.dataset.editBudget;
     if (editBudgetId) editBudget(editBudgetId);
+    const createBudgetCategoryId = event.target.closest('[data-create-budget]')?.dataset.createBudget;
+    if (createBudgetCategoryId) openBudgetCreateForCategory(createBudgetCategoryId);
     const editGoalId = event.target.closest('[data-edit-goal]')?.dataset.editGoal;
     if (editGoalId) editGoal(editGoalId);
     const deleteGoalId = event.target.closest('[data-delete-goal]')?.dataset.deleteGoal;
@@ -1102,17 +1578,29 @@ function attachEvents() {
     if (editDebtId) editDebt(editDebtId);
     const deleteDebtId = event.target.closest('[data-delete-debt]')?.dataset.deleteDebt;
     if (deleteDebtId) deleteDebt(deleteDebtId);
+    const yearMonth = event.target.closest('[data-year-month]')?.dataset.yearMonth;
+    if (yearMonth) showYearDetail(yearMonth);
   });
 }
 
 function init() {
   bindElements();
+  restoreSession();
   syncFiltersToInputs();
   resetForms();
   syncSelectors();
   attachEvents();
   setActiveSection('dashboard');
   renderAll();
+  updateAuthVisibility();
+  if (authToken) {
+    isHydratingState = true;
+    void bootstrapAuthenticatedState().finally(() => {
+      isHydratingState = false;
+      renderAll();
+      updateAuthVisibility();
+    });
+  }
 }
 
 init();

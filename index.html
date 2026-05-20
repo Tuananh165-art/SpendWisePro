@@ -3,11 +3,143 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SpendWise Pro - Week 3</title>
+  <title>SpendWise Pro</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <div class="app-shell">
+  <div id="auth-overlay" class="auth-overlay hidden">
+    <div class="auth-shell">
+      <section class="auth-showcase panel-soft">
+        <div class="auth-brand auth-brand-large">
+          <div class="brand-icon">◆</div>
+          <div>
+            <div class="brand-title">SpendWise Pro</div>
+            <div class="brand-subtitle">Quản lý tài chính cá nhân rõ ràng, an toàn và dễ duy trì mỗi ngày.</div>
+          </div>
+        </div>
+        <div class="auth-showcase-copy">
+          <div class="auth-eyebrow">Finance OS cho cá nhân</div>
+          <h1>Nắm toàn bộ thu chi, hạn mức và mục tiêu trong một không gian gọn gàng.</h1>
+          <p>Đăng nhập để tiếp tục theo dõi ví tiền, chi tiêu theo danh mục và dữ liệu tài chính đã lưu trên hệ thống.</p>
+        </div>
+        <div class="auth-benefits-list">
+          <article class="auth-benefit-card">
+            <strong>Đồng bộ an toàn</strong>
+            <span>Dữ liệu được lưu bằng backend + database thay vì chỉ nằm ở local browser.</span>
+          </article>
+          <article class="auth-benefit-card">
+            <strong>Theo dõi dễ hiểu</strong>
+            <span>Dashboard, lịch sử giao dịch và cảnh báo ngân sách được trình bày trực quan.</span>
+          </article>
+          <article class="auth-benefit-card">
+            <strong>Bắt đầu nhanh</strong>
+            <span>Tạo tài khoản chỉ mất vài giây để tiếp tục quản lý tài chính cá nhân của bạn.</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="auth-panel panel-soft">
+        <div class="auth-panel-top">
+          <div class="auth-panel-intro">
+            <div class="auth-brand auth-brand-compact">
+              <div class="brand-icon">◆</div>
+              <div>
+                <div class="brand-title">SpendWise Pro</div>
+                <div class="brand-subtitle">Khu vực tài khoản bảo mật</div>
+              </div>
+            </div>
+            <div class="auth-trust-pill">Bảo mật phiên đăng nhập • Lưu dữ liệu bằng database</div>
+          </div>
+          <div class="auth-panel-note">
+            <strong>Truy cập tài khoản</strong>
+            <span>Đăng nhập nhanh để tiếp tục làm việc, hoặc tạo account mới nếu bạn chưa có dữ liệu cá nhân trên hệ thống.</span>
+          </div>
+        </div>
+
+        <div class="auth-tabs" aria-label="Điều hướng tài khoản">
+          <button id="show-login" class="auth-tab active" type="button">Đăng nhập</button>
+          <button id="show-register" class="auth-tab" type="button">Đăng ký</button>
+        </div>
+
+        <form id="login-form" class="auth-form active-auth-form">
+          <div class="auth-form-header">
+            <h2>Chào mừng quay lại</h2>
+            <p>Đăng nhập bằng email và mật khẩu để tiếp tục với dữ liệu tài chính của bạn.</p>
+          </div>
+          <div class="auth-field">
+            <label for="login-email">Email</label>
+            <input id="login-email" type="email" placeholder="name@example.com" autocomplete="email" />
+          </div>
+          <div class="auth-field">
+            <label for="login-password">Mật khẩu</label>
+            <input id="login-password" type="password" placeholder="••••••" autocomplete="current-password" />
+          </div>
+          <div class="auth-inline-meta">
+            <span>Phiên sẽ tự đồng bộ với database sau khi đăng nhập.</span>
+            <button type="button" id="show-forgot-password" class="link-button auth-link-inline">Quên mật khẩu?</button>
+          </div>
+          <div class="auth-actions-row auth-actions-stack auth-actions-single">
+            <button type="submit" class="cta-primary auth-submit auth-submit-wide">Đăng nhập vào SpendWise Pro</button>
+          </div>
+          <div id="login-error" class="helper-error auth-helper-card"></div>
+        </form>
+
+        <form id="register-form" class="auth-form hidden-auth-form">
+          <div class="auth-form-header">
+            <h2>Tạo tài khoản mới</h2>
+            <p>Bắt đầu lưu trữ chi tiêu, hạn mức và mục tiêu tài chính của bạn trên hệ thống.</p>
+          </div>
+          <div class="auth-field">
+            <label for="register-fullname">Họ tên</label>
+            <input id="register-fullname" type="text" placeholder="Nguyễn Văn A" autocomplete="name" />
+          </div>
+          <div class="auth-field">
+            <label for="register-email">Email</label>
+            <input id="register-email" type="email" placeholder="name@example.com" autocomplete="email" />
+          </div>
+          <div id="register-email-error" class="helper-error inline-error auth-helper-card"></div>
+          <div class="auth-field auth-field-grid">
+            <div>
+              <label for="register-password">Mật khẩu</label>
+              <input id="register-password" type="password" placeholder="Tối thiểu 6 ký tự" autocomplete="new-password" />
+            </div>
+            <div>
+              <label for="register-confirm-password">Xác nhận mật khẩu</label>
+              <input id="register-confirm-password" type="password" placeholder="Nhập lại mật khẩu" autocomplete="new-password" />
+            </div>
+          </div>
+          <div class="auth-inline-meta auth-inline-note-only">
+            <span>Mật khẩu cần từ 6 ký tự trở lên để hệ thống tạo account.</span>
+          </div>
+          <div class="auth-actions-row auth-actions-stack auth-actions-single">
+            <button type="submit" class="cta-primary auth-submit auth-submit-wide">Tạo account và bắt đầu</button>
+          </div>
+          <div id="register-error" class="helper-error auth-helper-card"></div>
+        </form>
+
+        <form id="forgot-password-form" class="auth-form hidden-auth-form">
+          <div class="auth-form-header">
+            <h2>Khôi phục tài khoản</h2>
+            <p>Nhập email đã đăng ký, hệ thống sẽ ghi nhận yêu cầu khôi phục của bạn.</p>
+          </div>
+          <div class="auth-field">
+            <label for="forgot-email">Email đã đăng ký</label>
+            <input id="forgot-email" type="email" placeholder="name@example.com" autocomplete="email" />
+          </div>
+          <div class="auth-inline-meta auth-inline-note-only">
+            <span>Hệ thống sẽ phản hồi an toàn dù email có tồn tại hay không.</span>
+          </div>
+          <div class="auth-actions-row auth-actions-stack auth-actions-single auth-forgot-actions">
+            <button type="submit" class="cta-primary auth-submit auth-submit-wide">Gửi yêu cầu khôi phục</button>
+            <button type="button" id="back-to-login" class="link-button auth-link-inline">Quay lại đăng nhập</button>
+          </div>
+          <div id="forgot-password-error" class="helper-error auth-helper-card"></div>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <div class="app-shell" id="app-shell">
     <aside class="sidebar panel-dark">
       <div class="brand-block">
         <div class="brand-icon">◆</div>
@@ -21,19 +153,23 @@
         <button class="nav-item active" data-section="dashboard"><span class="nav-icon">▦</span><span>Dashboard</span></button>
         <button class="nav-item" data-section="transactions"><span class="nav-icon">⇄</span><span>Giao dịch</span></button>
         <button class="nav-item" data-section="wallets"><span class="nav-icon">◫</span><span>Ví của tôi</span></button>
-        <button class="nav-item" data-section="budgets"><span class="nav-icon">◔</span><span>Hạn mức</span></button>
+        <button class="nav-item" data-section="budgets"><span class="nav-icon">◔</span><span>Hạn mức</span><span id="budget-badge" class="nav-badge hidden">!</span></button>
         <button class="nav-item" data-section="goals"><span class="nav-icon">◉</span><span>Mục tiêu</span></button>
         <button class="nav-item" data-section="debts"><span class="nav-icon">⌁</span><span>Khoản nợ</span></button>
         <button class="nav-item" data-section="analytics"><span class="nav-icon">◫</span><span>Phân tích</span></button>
       </nav>
 
       <div class="user-card panel-soft">
-        <div class="avatar">U</div>
+        <div class="avatar" id="user-avatar">U</div>
         <div class="user-meta">
-          <strong>User</strong>
-          <span>Thành viên</span>
+          <span class="user-meta-label">Tài khoản đang dùng</span>
+          <strong id="user-name" title="User">User</strong>
+          <span id="user-role" title="Thành viên">Thành viên</span>
         </div>
-        <div class="gear">⚙</div>
+        <button class="logout-button" id="logout-btn" type="button" title="Đăng xuất">
+          <span class="logout-button-icon">⇥</span>
+          <span>Đăng xuất</span>
+        </button>
       </div>
     </aside>
 
@@ -51,25 +187,25 @@
 
       <section id="section-dashboard" class="view-section active-section">
         <div class="stats-grid">
-          <article class="metric-card panel-soft">
+          <article class="metric-card panel-soft clickable-summary" data-summary-filter="all">
             <span class="metric-label">Tổng tài sản</span>
             <strong id="summary-assets" class="metric-value">0 ₫</strong>
-            <span class="metric-foot positive">↗ +12.5% tháng này</span>
+            <span class="metric-foot positive">↗ Tổng giá trị các ví</span>
           </article>
-          <article class="metric-card panel-soft">
+          <article class="metric-card panel-soft clickable-summary" data-summary-filter="income">
             <span class="metric-label">Thu nhập</span>
             <strong id="summary-income" class="metric-value positive">0 ₫</strong>
             <span class="metric-foot" id="income-count-foot">0 giao dịch thu</span>
           </article>
-          <article class="metric-card panel-soft">
+          <article class="metric-card panel-soft clickable-summary" data-summary-filter="expense">
             <span class="metric-label">Chi tiêu</span>
             <strong id="summary-expense" class="metric-value negative">0 ₫</strong>
             <span class="metric-foot" id="expense-count-foot">0 giao dịch chi</span>
           </article>
-          <article class="metric-card panel-soft highlight-card">
-            <span class="metric-label">Hạn mức tổng</span>
-            <strong id="summary-budget" class="metric-value warning">0 ₫</strong>
-            <div class="mini-progress"><div id="total-budget-progress" class="mini-progress-fill"></div></div>
+          <article class="metric-card panel-soft highlight-card clickable-summary" data-summary-filter="balance">
+            <span class="metric-label">Số dư tháng</span>
+            <strong id="summary-balance" class="metric-value warning">0 ₫</strong>
+            <span id="balance-foot" class="metric-foot">Thu - Chi tháng hiện tại</span>
           </article>
         </div>
 
@@ -114,7 +250,7 @@
           <div class="panel-header-row">
             <div>
               <h3>Lịch sử Giao dịch</h3>
-              <p>Bộ lọc đa điều kiện và lịch sử giao dịch.</p>
+              <p>Bộ lọc đa điều kiện và lịch sử giao dịch theo nhóm ngày.</p>
             </div>
             <div class="toolbar-actions">
               <button class="icon-ghost" id="export-transactions">⇩</button>
@@ -132,22 +268,7 @@
             </select>
             <select id="category-filter"></select>
           </div>
-          <div class="transaction-table-wrap">
-            <table class="transaction-table">
-              <thead>
-                <tr>
-                  <th>NGÀY</th>
-                  <th>VÍ/NGUỒN</th>
-                  <th>DANH MỤC</th>
-                  <th>MÔ TẢ</th>
-                  <th>LOẠI</th>
-                  <th>SỐ TIỀN</th>
-                  <th>THAO TÁC</th>
-                </tr>
-              </thead>
-              <tbody id="transaction-table-body"></tbody>
-            </table>
-          </div>
+          <div id="transaction-group-list" class="transaction-group-list"></div>
         </article>
       </section>
 
@@ -225,39 +346,75 @@
       </section>
 
       <section id="section-analytics" class="view-section">
-        <div class="analytics-top-grid">
-          <article class="panel-soft chart-panel">
-            <div class="panel-header-inline"><h3>Phân bố chi tiêu</h3></div>
-            <div class="analytics-chart-center">
-              <svg id="analytics-donut" viewBox="0 0 220 220"></svg>
+        <article class="panel-soft panel-large analytics-controls-panel">
+          <div class="panel-header-row">
+            <div>
+              <h3>Báo cáo tài chính</h3>
+              <p>Xem chi theo danh mục và tổng quan năm theo điều kiện lựa chọn.</p>
             </div>
-            <div id="analytics-donut-legend" class="analytics-legend"></div>
-          </article>
-          <article class="panel-soft chart-panel">
-            <div class="panel-header-inline"><h3>Xu hướng tích lũy</h3></div>
-            <svg id="savings-trend-chart" viewBox="0 0 520 240" class="line-chart"></svg>
-          </article>
+            <div class="analytics-controls-inline">
+              <div class="analytics-tabs">
+                <button class="analytics-tab active" data-analytics-tab="category">Chi theo danh mục</button>
+                <button class="analytics-tab" data-analytics-tab="yearly">Tổng quan năm</button>
+              </div>
+              <input id="analytics-month" type="month" />
+              <div class="year-switcher">
+                <button id="year-prev" class="icon-ghost">‹</button>
+                <strong id="analytics-year-label">2026</strong>
+                <button id="year-next" class="icon-ghost">›</button>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <div id="analytics-category-view" class="analytics-view active-analytics-view">
+          <div class="analytics-top-grid">
+            <article class="panel-soft chart-panel">
+              <div class="panel-header-inline">
+                <h3>Phân bố chi tiêu</h3>
+                <strong id="analytics-total-expense">0 ₫</strong>
+              </div>
+              <div class="analytics-chart-center">
+                <svg id="analytics-donut" viewBox="0 0 220 220"></svg>
+              </div>
+              <div id="analytics-donut-legend" class="analytics-legend"></div>
+            </article>
+            <article class="panel-soft chart-panel">
+              <div class="panel-header-inline"><h3>Xu hướng tích lũy</h3></div>
+              <svg id="savings-trend-chart" viewBox="0 0 520 240" class="line-chart"></svg>
+            </article>
+          </div>
+          <div class="analytics-bottom-grid">
+            <article class="panel-soft mini-analytics-card">
+              <h3>🏆 Top Danh mục Chi tiêu</h3>
+              <div id="top-category-card" class="highlight-row"></div>
+            </article>
+            <article class="panel-soft mini-analytics-card">
+              <h3>📊 Thống kê Chi tiêu</h3>
+              <div class="analytics-metrics">
+                <div><span>Chi tiêu trung bình/giao dịch</span><strong id="avg-expense-per-tx">0 ₫</strong></div>
+                <div><span>Chi tiêu trung bình/ngày</span><strong id="avg-expense-per-day">0 ₫</strong></div>
+              </div>
+            </article>
+            <article class="panel-soft mini-analytics-card">
+              <h3>⚠ Cảnh báo Hạn mức</h3>
+              <div id="analytics-alert-card" class="highlight-row warning"></div>
+            </article>
+          </div>
         </div>
-        <div class="analytics-bottom-grid">
-          <article class="panel-soft mini-analytics-card">
-            <h3>🏆 Top Danh mục Chi tiêu</h3>
-            <div id="top-category-card" class="highlight-row"></div>
-          </article>
-          <article class="panel-soft mini-analytics-card">
-            <h3>📊 Thống kê Chi tiêu</h3>
-            <div class="analytics-metrics">
-              <div><span>Chi tiêu trung bình/giao dịch</span><strong id="avg-expense-per-tx">0 ₫</strong></div>
-              <div><span>Chi tiêu trung bình/ngày</span><strong id="avg-expense-per-day">0 ₫</strong></div>
-            </div>
-          </article>
-          <article class="panel-soft mini-analytics-card">
-            <h3>⚠ Cảnh báo Hạn mức</h3>
-            <div id="analytics-alert-card" class="highlight-row warning"></div>
+
+        <div id="analytics-yearly-view" class="analytics-view">
+          <article class="panel-soft chart-panel">
+            <div class="panel-header-inline"><h3>Thu vs Chi theo tháng</h3></div>
+            <div id="yearly-bar-chart" class="bars-chart wide-chart yearly-bars"></div>
+            <div id="yearly-chart-detail" class="empty-state">Chọn một tháng để xem chi tiết thu, chi và số dư.</div>
           </article>
         </div>
       </section>
     </main>
   </div>
+
+  <div id="toast-container" class="toast-container"></div>
 
   <div id="modal-backdrop" class="modal-backdrop hidden">
     <div class="modal-card panel-soft">
@@ -471,6 +628,20 @@
         </div>
         <div id="debt-error" class="helper-error"></div>
       </form>
+    </div>
+  </div>
+
+  <div id="confirm-backdrop" class="confirm-backdrop hidden">
+    <div class="confirm-card panel-soft">
+      <div class="confirm-icon" id="confirm-icon">⚠️</div>
+      <div class="confirm-content">
+        <h3 id="confirm-title">Xác nhận</h3>
+        <p id="confirm-message">Bạn có chắc muốn tiếp tục?</p>
+      </div>
+      <div class="confirm-actions">
+        <button id="confirm-cancel" class="cta-secondary small" type="button">Hủy</button>
+        <button id="confirm-accept" class="cta-primary small" type="button">Tiếp tục</button>
+      </div>
     </div>
   </div>
 

@@ -16,7 +16,12 @@ import {
   deleteCategoryById,
   deleteBudgetById,
   deleteGoalById,
-  validateDebt
+  validateDebt,
+  groupTransactionsByDate,
+  validateRegistration,
+  authenticateUser,
+  buildBudgetOverview,
+  getAvailableYears
 } from '../logic.js';
 
 const categories = [
@@ -26,10 +31,10 @@ const categories = [
 ];
 
 const transactions = [
-  { id: 't1', type: 'income', amount: 10000000, categoryId: 'salary', date: '2026-05-01', description: '' },
-  { id: 't2', type: 'expense', amount: 500000, categoryId: 'food', date: '2026-05-02', description: '' },
-  { id: 't3', type: 'expense', amount: 250000, categoryId: 'transport', date: '2026-05-03', description: '' },
-  { id: 't4', type: 'expense', amount: 300000, categoryId: 'food', date: '2026-04-02', description: '' }
+  { id: 't1', type: 'income', amount: 10000000, categoryId: 'salary', date: '2026-05-01', time: '08:30', description: '' },
+  { id: 't2', type: 'expense', amount: 500000, categoryId: 'food', date: '2026-05-02', time: '12:45', description: '' },
+  { id: 't3', type: 'expense', amount: 250000, categoryId: 'transport', date: '2026-05-03', time: '09:15', description: '' },
+  { id: 't4', type: 'expense', amount: 300000, categoryId: 'food', date: '2026-04-02', time: '18:00', description: '' }
 ];
 
 const budgets = [
@@ -66,6 +71,18 @@ test('validateTransaction rejects invalid amount', () => {
   assert.match(result.message, /lớn hơn 0/i);
 });
 
+test('validateTransaction asks for confirmation when date is in the future', () => {
+  const result = validateTransaction(categories, { type: 'expense', amount: 10000, categoryId: 'food', date: '2099-05-05' });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'future_date_confirmation');
+  assert.match(result.message, /tương lai/i);
+});
+
+test('validateTransaction allows future date after confirmation', () => {
+  const result = validateTransaction(categories, { type: 'expense', amount: 10000, categoryId: 'food', date: '2099-05-05' }, { allowFuture: true });
+  assert.equal(result.ok, true);
+});
+
 test('computeMonthlySummary returns income expense balance and count', () => {
   const result = computeMonthlySummary(transactions, '2026-05');
   assert.deepEqual(result, { income: 10000000, expense: 750000, balance: 9250000, count: 3 });
@@ -91,6 +108,18 @@ test('computeBudgetStatuses marks warning/critical/danger correctly', () => {
   assert.equal(result[0].categoryName, 'Ăn uống');
   assert.equal(result[0].usage, 71.43);
   assert.equal(result[0].level, 'warning');
+});
+
+test('buildBudgetOverview includes unconfigured expense categories', () => {
+  const result = buildBudgetOverview(
+    [...categories, { id: 'bills', name: 'Hóa đơn', type: 'expense', icon: '💡' }],
+    transactions,
+    budgets,
+    '2026-05'
+  );
+
+  assert.equal(result.some(item => item.categoryId === 'bills'), true);
+  assert.equal(result.find(item => item.categoryId === 'bills').hasBudget, false);
 });
 
 test('buildBudgetAlert returns warning alert when threshold exceeded', () => {
@@ -227,7 +256,7 @@ test('deleteCategoryById rejects deleting category used by transactions or budge
   );
 
   assert.equal(result.ok, false);
-  assert.match(result.message, /đã phát sinh giao dịch|đang được áp dụng hạn mức/i);
+  assert.match(result.message, /đang được sử dụng bởi 1 giao dịch|đang được áp dụng hạn mức/i);
 });
 
 test('deleteCategoryById removes unused category', () => {
@@ -236,4 +265,68 @@ test('deleteCategoryById removes unused category', () => {
 
   assert.equal(result.ok, true);
   assert.deepEqual(result.categories.map(item => item.id), ['salary', 'food', 'transport']);
+});
+
+test('groupTransactionsByDate groups by day and sorts newest day first', () => {
+  const grouped = groupTransactionsByDate([
+    { id: 't1', type: 'income', amount: 100, categoryId: 'salary', date: '2026-05-03', time: '08:00', description: '' },
+    { id: 't2', type: 'expense', amount: 50, categoryId: 'food', date: '2026-05-03', time: '09:00', description: '' },
+    { id: 't3', type: 'expense', amount: 20, categoryId: 'food', date: '2026-05-01', time: '12:00', description: '' }
+  ]);
+
+  assert.equal(grouped.length, 2);
+  assert.equal(grouped[0].date, '2026-05-03');
+  assert.equal(grouped[0].items.length, 2);
+});
+
+test('validateRegistration rejects invalid email, weak password and mismatch', () => {
+  const users = [];
+  const result = validateRegistration(users, {
+    fullName: 'Nguyen Van A',
+    email: 'sai-email',
+    password: '123',
+    confirmPassword: '1234'
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.field, 'email');
+});
+
+test('validateRegistration rejects duplicate email', () => {
+  const users = [{ email: 'test@example.com' }];
+  const result = validateRegistration(users, {
+    fullName: 'Nguyen Van A',
+    email: 'test@example.com',
+    password: '123456',
+    confirmPassword: '123456'
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.message, /đã được đăng ký/i);
+});
+
+test('authenticateUser accepts valid credentials', () => {
+  const users = [{ email: 'test@example.com', password: '123456', fullName: 'User Test' }];
+  const result = authenticateUser(users, 'test@example.com', '123456');
+
+  assert.equal(result.ok, true);
+  assert.equal(result.user.fullName, 'User Test');
+});
+
+test('authenticateUser rejects invalid credentials', () => {
+  const users = [{ email: 'test@example.com', password: '123456', fullName: 'User Test' }];
+  const result = authenticateUser(users, 'test@example.com', 'wrong');
+
+  assert.equal(result.ok, false);
+  assert.match(result.message, /không đúng/i);
+});
+
+test('getAvailableYears returns unique sorted years descending', () => {
+  const years = getAvailableYears([
+    { date: '2026-05-01' },
+    { date: '2025-12-01' },
+    { date: '2026-01-02' }
+  ]);
+
+  assert.deepEqual(years, [2026, 2025]);
 });

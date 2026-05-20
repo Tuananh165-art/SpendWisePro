@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "set PORT=8081&& node server.js",
+    "start": "set PORT=8081&& node server.js",
     "test": "node --test"
   }
 }
