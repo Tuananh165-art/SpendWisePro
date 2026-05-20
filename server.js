@@ -399,7 +399,7 @@ const isDirectRun = (() => {
 })();
 
 if (isDirectRun) {
-  const port = Number(process.env.PORT || 3000);
+  const port = Number(process.env.PORT || 8081);
   const app = createApp({
     dbPath: process.env.SPENDWISE_DB_PATH || DEFAULT_DB_PATH,
     staticDir: process.env.SPENDWISE_STATIC_DIR || DEFAULT_STATIC_DIR

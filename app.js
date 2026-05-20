@@ -171,10 +171,27 @@ async function apiRequest(pathname, { method = 'GET', body, skipAuth = false } =
   });
 
   const text = await response.text();
-  const json = text ? JSON.parse(text) : null;
-  if (!response.ok) {
-    throw new Error(json?.message || 'Yêu cầu tới máy chủ thất bại');
+  const contentType = response.headers.get('content-type') || '';
+  let json = null;
+
+  if (text) {
+    try {
+      if (contentType.includes('application/json') || contentType.includes('+json')) {
+        json = JSON.parse(text);
+      }
+    } catch {
+      json = null;
+    }
   }
+
+  if (!response.ok) {
+    throw new Error(json?.message || `Yêu cầu tới máy chủ thất bại (${response.status})`);
+  }
+
+  if (text && !json && (contentType.includes('application/json') || contentType.includes('+json'))) {
+    throw new Error('Phản hồi máy chủ không hợp lệ (JSON bị lỗi)');
+  }
+
   return json;
 }
 
